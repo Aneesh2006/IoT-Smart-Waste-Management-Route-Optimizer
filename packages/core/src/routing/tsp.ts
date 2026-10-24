@@ -50,7 +50,13 @@ export function twoOpt(
 }
 
 /** Or-opt: move chains of 1–3 consecutive stops (either way round) to a better slot. */
-export function orOpt(seq: readonly number[], start: number, end: number, d: Dist): number[] {
+export function orOpt(
+  seq: readonly number[],
+  start: number,
+  end: number,
+  d: Dist,
+  onMove?: (tour: number[], gain: number) => void,
+): number[] {
   let tour = [...seq];
   let improved = true;
   while (improved) {
@@ -89,6 +95,7 @@ export function orOpt(seq: readonly number[], start: number, end: number, d: Dis
           const ins = bestReversed ? chain.reverse() : chain;
           tour = [...rest.slice(0, bestPos), ...ins, ...rest.slice(bestPos)];
           improved = true;
+          onMove?.([...tour], best);
         }
       }
     }

@@ -1,5 +1,5 @@
 import { COSTS, POLICIES, POLICY_ORDER, type Construction } from '@binsight/core';
-import { Route, Scale, Zap } from 'lucide-react';
+import { FlaskConical, Route, Scale, Zap } from 'lucide-react';
 import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
@@ -126,7 +126,14 @@ export function OpsPanel() {
         </button>
       </Section>
 
-      <Section title="Route solver">
+      <Section
+        title="Route solver"
+        right={
+          <button onClick={() => useApp.getState().setLabOpen(true)} className="flex items-center gap-1 text-[11px] text-neon hover:underline" title="Watch the algorithms think (L)">
+            <FlaskConical size={12} /> Algorithm lab
+          </button>
+        }
+      >
         <div className="flex items-center justify-between gap-2">
           <Segmented<Construction>
             size="sm"

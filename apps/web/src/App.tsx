@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BottomBar } from './hud/BottomBar.tsx';
 import { ComparePanel } from './hud/ComparePanel.tsx';
 import { Inspector } from './hud/Inspector.tsx';
+import { LabPanel } from './hud/LabPanel.tsx';
 import { OpsPanel } from './hud/OpsPanel.tsx';
 import { TopBar } from './hud/TopBar.tsx';
 import { CityCanvas } from './scene/CityCanvas.tsx';
@@ -17,10 +18,13 @@ function useHotkeys() {
         s.togglePause();
       } else if (e.key === 'Escape') {
         if (s.compareOpen) return s.setCompareOpen(false);
+        if (s.labOpen) return s.setLabOpen(false);
         s.selectBin(null);
         s.selectTruck(null);
       } else if (e.key === 'c') {
         s.setCompareOpen(!s.compareOpen);
+      } else if (e.key === 'l') {
+        s.setLabOpen(!s.labOpen);
       } else if (/^[1-5]$/.test(e.key)) {
         s.setSpeed(SPEEDS[Number(e.key) - 1]);
       } else if (e.key === 'n') {
@@ -49,6 +53,7 @@ export function App() {
       </div>
       <BottomBar />
       <ComparePanel />
+      <LabPanel />
     </div>
   );
 }

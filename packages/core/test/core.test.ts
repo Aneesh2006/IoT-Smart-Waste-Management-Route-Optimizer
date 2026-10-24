@@ -154,3 +154,18 @@ describe('simulation', () => {
     }
   });
 });
+
+describe('algorithm lab', () => {
+  it('every algorithm returns a permutation and none beats the exact optimum', async () => {
+    const { makeLabProblem, runLab } = await import('../src/lab.ts');
+    const sim = new Simulation({ seed: 'lab' });
+    const problem = makeLabProblem(sim.city, sim.table, 10, 'lab');
+    const exact = runLab(problem, 'exact');
+    for (const alg of ['nearest', 'savings', 'twoopt', 'oropt', 'anneal', 'ants'] as const) {
+      const run = runLab(problem, alg);
+      expect([...run.order].sort((a, b) => a - b)).toEqual(Array.from({ length: 10 }, (_, i) => i));
+      expect(run.cost).toBeGreaterThanOrEqual(exact.cost - 1e-6);
+      expect(run.frames.length).toBeGreaterThan(0);
+    }
+  });
+});

@@ -6,5 +6,6 @@ export * from './profiles.ts';
 export * from './policies.ts';
 export * from './sim.ts';
 export * from './compare.ts';
+export * from './lab.ts';
 export * from './routing/tsp.ts';
 export * from './routing/cvrp.ts';

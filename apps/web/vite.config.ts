@@ -15,6 +15,7 @@ const watchCore = (): Plugin => ({
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), watchCore()],
-  server: { port: 5173, host: true },
+  // Polling: native file events are unreliable on some Windows setups and edits get missed.
+  server: { port: 5173, host: true, watch: { usePolling: true, interval: 250 } },
   build: { chunkSizeWarningLimit: 2000 },
 });

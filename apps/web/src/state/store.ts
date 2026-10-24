@@ -22,6 +22,7 @@ interface AppState {
   /** Ghost the buildings so the data layer (bins, routes) stands out. */
   dataView: boolean;
   compareOpen: boolean;
+  labOpen: boolean;
 
   bump(): void;
   setSpeed(speed: number): void;
@@ -39,6 +40,7 @@ interface AppState {
   setLeftOpen(open: boolean): void;
   toggleDataView(): void;
   setCompareOpen(open: boolean): void;
+  setLabOpen(open: boolean): void;
 }
 
 const seedFromUrl = () => new URLSearchParams(window.location.search).get('seed') ?? 'binsight';
@@ -62,6 +64,7 @@ export const useApp = create<AppState>((set, get) => ({
   leftOpen: typeof window !== 'undefined' ? window.innerWidth >= 900 : true,
   dataView: false,
   compareOpen: false,
+  labOpen: false,
 
   bump: () => set((s) => ({ tick: s.tick + 1 })),
   setSpeed: (speed) => set({ speed, paused: false }),
@@ -119,5 +122,6 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setLeftOpen: (open) => set({ leftOpen: open }),
   toggleDataView: () => set((s) => ({ dataView: !s.dataView })),
-  setCompareOpen: (open) => set({ compareOpen: open }),
+  setCompareOpen: (open) => set({ compareOpen: open, labOpen: false }),
+  setLabOpen: (open) => set({ labOpen: open, compareOpen: false }),
 }));
