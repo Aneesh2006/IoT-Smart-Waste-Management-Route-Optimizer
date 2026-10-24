@@ -164,7 +164,7 @@ function Impact({ sim }: { sim: Simulation }) {
               <h2 className="text-xl font-bold">{tab === 'flow' ? 'Where the city’s waste goes' : tab === 'fleet' ? 'What the fleet did today' : 'Where to add bin capacity'}</h2>
               <p className="mt-0.5 text-[12px] text-slate-400">
                 {tab === 'plan'
-                  ? 'Bigger bins where they overflow most, tested on a seeded week before you build anything.'
+                  ? 'Bigger bins or compactors where they overflow most, tested on a seeded week before you build anything.'
                   : `Since the start: ${days < 1 ? `${Math.round(days * 24)} hours` : `${days.toFixed(1)} days`} of city time.`}
               </p>
             </div>
