@@ -1,6 +1,8 @@
 import { formatClock, type EventKind } from '@binsight/core';
 import { AlertTriangle, ArrowDownToLine, Home, Info, Route, Siren, Zap } from 'lucide-react';
 import { STREAM_COLORS } from '../lib/colors.ts';
+import { HEAT_LABEL } from '../scene/Heatmap.tsx';
+import { ReplayBar } from './ReplayBar.tsx';
 import { useApp } from '../state/store.ts';
 import { Panel } from './ui.tsx';
 
@@ -19,6 +21,7 @@ export function BottomBar() {
   const sim = useApp((s) => s.sim);
   const { selectBin, selectTruck } = useApp.getState();
   const events = sim.events.slice(-5).reverse();
+  const heatmap = useApp((s) => s.heatmap);
   // One line per event keeps the log a fixed height above the side panels.
   return (
     <div className="pointer-events-none absolute inset-x-3 bottom-3 z-40 flex items-end gap-3">
@@ -42,7 +45,15 @@ export function BottomBar() {
           ))}
         </ul>
       </Panel>
-      <div className="flex-1" />
+      <div className="flex flex-1 flex-col items-center gap-2">
+        <ReplayBar />
+        {heatmap !== 'off' && (
+          <Panel className="pointer-events-auto flex items-center gap-2 px-3 py-1.5 text-[11px] text-slate-300">
+            <span className="h-2 w-24 rounded-full" style={{ background: 'linear-gradient(90deg,#4338ca,#14b8a6,#facc15,#ef4444)' }} />
+            {HEAT_LABEL[heatmap]}
+          </Panel>
+        )}
+      </div>
       <Panel className="pointer-events-auto hidden px-3 py-2 lg:block">
         <div className="eyebrow mb-1.5">Legend</div>
         <div className="flex items-center gap-2 text-[10.5px] text-slate-400">

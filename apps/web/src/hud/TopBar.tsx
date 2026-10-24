@@ -1,5 +1,5 @@
 import { DAY, HOUR, clockParts } from '@binsight/core';
-import { CircleHelp, Cloud, Radar, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
+import { CircleHelp, Cloud, Flame, History, Radar, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
 import { SPEEDS, useApp } from '../state/store.ts';
 import { IconButton, Panel, Segmented } from './ui.tsx';
 
@@ -28,6 +28,7 @@ export function TopBar() {
   const paused = useApp((s) => s.paused);
   const leftOpen = useApp((s) => s.leftOpen);
   const dataView = useApp((s) => s.dataView);
+  const heatmap = useApp((s) => s.heatmap);
   const mode = useApp((s) => s.mode);
   const liveStatus = useApp((s) => s.liveStatus);
   const liveControl = useApp((s) => s.liveControl);
@@ -83,10 +84,16 @@ export function TopBar() {
             <IconButton onClick={skipToNextShift} title="Skip to the next shift (N)">
               <FastForward size={16} />
             </IconButton>
+            <IconButton onClick={() => useApp.getState().startReplay()} title="Replay the last day as a time-lapse (R)">
+              <History size={16} />
+            </IconButton>
           </>
         )}
         <IconButton onClick={toggleDataView} title="Data view: ghost the buildings (V)" active={dataView}>
           <Layers size={16} />
+        </IconButton>
+        <IconButton onClick={() => useApp.getState().cycleHeatmap()} title={`Heatmap: ${heatmap} (G cycles fill → overflow → generated)`} active={heatmap !== 'off'}>
+          <Flame size={16} />
         </IconButton>
         <IconButton onClick={() => useApp.getState().setXrayOpen(true)} title="Cloud X-Ray: watch readings travel through AWS (X)">
           <Radar size={16} />

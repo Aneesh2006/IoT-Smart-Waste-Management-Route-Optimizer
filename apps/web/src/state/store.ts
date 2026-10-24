@@ -3,6 +3,9 @@ import { create } from 'zustand';
 
 export const SPEEDS = [10, 60, 300, 1200, 3600] as const;
 
+export type HeatMode = 'off' | 'fill' | 'overflow' | 'generated';
+export const HEAT_MODES: HeatMode[] = ['off', 'fill', 'overflow', 'generated'];
+
 export type CameraFocus = { x: number; z: number; distance?: number } | null;
 
 interface AppState {
@@ -27,6 +30,9 @@ interface AppState {
   guideOpen: boolean;
   editorOpen: boolean;
   xrayOpen: boolean;
+  heatmap: HeatMode;
+  /** Time-lapse of the recorded tape; the scene draws the tape frame instead of the live sim. */
+  replay: { index: number; playing: boolean } | null;
   toast: string | null;
   mode: 'sandbox' | 'live';
   liveStatus: 'off' | 'connecting' | 'live' | 'error';
@@ -57,6 +63,10 @@ interface AppState {
   setGuideOpen(open: boolean): void;
   setEditorOpen(open: boolean): void;
   setXrayOpen(open: boolean): void;
+  cycleHeatmap(): void;
+  startReplay(): void;
+  setReplay(r: { index: number; playing: boolean }): void;
+  exitReplay(): void;
   showToast(text: string): void;
   /** Copy a link that rebuilds this exact setup (not how far the run has got). */
   copyShareLink(): Promise<void>;
@@ -131,6 +141,8 @@ export const useApp = create<AppState>((set, get) => ({
   guideOpen: !guideSeen(),
   editorOpen: false,
   xrayOpen: false,
+  heatmap: 'off',
+  replay: null,
   toast: null,
   mode: 'sandbox',
   liveStatus: 'off',
@@ -210,6 +222,15 @@ export const useApp = create<AppState>((set, get) => ({
     }
     set({ guideOpen: open, compareOpen: false, labOpen: false });
   },
+  startReplay: () => {
+    const { sim, mode, showToast } = get();
+    if (mode === 'live') return showToast('Replay works on the Sandbox city.');
+    if (sim.tape.length < 8) return showToast('Run the city for a few hours first: there is nothing to replay yet.');
+    set({ replay: { index: Math.max(0, sim.tape.length - 96), playing: true }, paused: true, followTruck: null });
+  },
+  setReplay: (replay) => set({ replay }),
+  exitReplay: () => set({ replay: null, paused: false }),
+  cycleHeatmap: () => set((s) => ({ heatmap: HEAT_MODES[(HEAT_MODES.indexOf(s.heatmap) + 1) % HEAT_MODES.length] })),
   setXrayOpen: (open) => set({ xrayOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false }),
   setEditorOpen: (open) => set({ editorOpen: open, compareOpen: false, labOpen: false, guideOpen: false }),
   showToast: (text) => {

@@ -20,8 +20,15 @@ function TruckBody({ truck, color }: { truck: TruckState; color: string }) {
   useFrame(() => {
     const g = group.current;
     if (!g) return;
-    g.position.set(truck.x, 0.2, truck.z);
-    g.rotation.y = truck.heading;
+    const { replay, sim } = useApp.getState();
+    const tape = replay ? sim.tape[replay.index] : null;
+    if (tape) {
+      g.position.set(tape.trucks[truck.id * 3], 0.2, tape.trucks[truck.id * 3 + 1]);
+      g.rotation.y = tape.trucks[truck.id * 3 + 2];
+    } else {
+      g.position.set(truck.x, 0.2, truck.z);
+      g.rotation.y = truck.heading;
+    }
     if (truck.status === 'broken') {
       const on = Math.sin(performance.now() / 160) > 0;
       lights.color.copy(glow.set('#ff9a1a').multiplyScalar(on ? 4 : 0.2));
@@ -95,6 +102,7 @@ function RouteRibbons() {
   const sim = useApp((s) => s.sim);
   useApp((s) => s.tick);
   const selected = useApp((s) => s.selectedTruck);
+  const replaying = useApp((s) => s.replay !== null);
   const version = sim.routeVersion;
   const routes = sim.trucks.map((t) => (t.status === 'broken' ? null : t.route));
   const ribbons = useMemo(
@@ -113,7 +121,7 @@ function RouteRibbons() {
   return (
     <group>
       {ribbons.map((pts, i) =>
-        pts && pts.length > 1 ? (
+        pts && pts.length > 1 && !replaying ? (
           <Line
             key={`${version}-${i}`}
             ref={(el) => {

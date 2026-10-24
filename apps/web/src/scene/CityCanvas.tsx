@@ -11,6 +11,7 @@ import { Buildings } from './Buildings.tsx';
 import { Facilities } from './Facilities.tsx';
 import { Greenery } from './Greenery.tsx';
 import { Hazards } from './Hazards.tsx';
+import { Heatmap } from './Heatmap.tsx';
 import { PhoneBins } from './PhoneBins.tsx';
 import { LabelProjector } from './Labels.tsx';
 import { Ground } from './Ground.tsx';
@@ -77,6 +78,7 @@ function World() {
       <Atmosphere center={center} />
       <Ground city={city} />
       <Roads city={city} />
+      <Heatmap city={city} />
       <Buildings city={city} />
       <Greenery city={city} />
       <Facilities city={city} />

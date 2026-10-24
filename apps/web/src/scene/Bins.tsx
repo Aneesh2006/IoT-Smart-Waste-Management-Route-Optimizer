@@ -78,13 +78,15 @@ export function Bins({ city }: { city: City }) {
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
     const { o, c } = scratch;
-    const { selectedBin, hoveredBin } = useApp.getState();
+    const { selectedBin, hoveredBin, replay } = useApp.getState();
+    const tape = replay ? sim.tape[replay.index] : null;
     const fm = fill.current!;
     const bm = beacon.current!;
     for (let i = 0; i < count; i++) {
       const site = city.bins[i];
       const st = sim.bins[i];
-      const level = Math.min(1.3, Math.max(0.03, st.fill));
+      const fillNow = tape ? tape.fills[i] : st.fill;
+      const level = Math.min(1.3, Math.max(0.03, fillNow));
       o.position.set(site.x, BASE_Y, site.z);
       o.rotation.set(0, 0, 0);
       o.scale.set(widen, level * BIN_HEIGHT, widen);
@@ -92,14 +94,14 @@ export function Bins({ city }: { city: City }) {
       fm.setMatrixAt(i, o.matrix);
 
       let glow = 1.25;
-      if (st.fill >= 1) glow = 1.9 + Math.sin(t * 6 + i) * 0.5;
-      else if (st.fill >= 0.8) glow = 1.6 + Math.sin(t * 3 + i) * 0.35;
+      if (fillNow >= 1) glow = 1.9 + Math.sin(t * 6 + i) * 0.5;
+      else if (fillNow >= 0.8) glow = 1.6 + Math.sin(t * 3 + i) * 0.35;
       if (i === hoveredBin || i === selectedBin) glow += 0.8;
-      if (st.sensorOk) fillColor(st.fill, c).multiplyScalar(glow);
+      if (st.sensorOk || tape) fillColor(fillNow, c).multiplyScalar(glow);
       else c.set('#475569').multiplyScalar(0.6 + 0.25 * Math.sin(t * 2 + i));
       fm.setColorAt(i, c);
 
-      if (st.fill >= 1) {
+      if (fillNow >= 1) {
         o.position.set(site.x, BASE_Y + BIN_HEIGHT, site.z);
         o.scale.set(1 + Math.sin(t * 4 + i) * 0.15, 110, 1 + Math.sin(t * 4 + i) * 0.15);
       } else {

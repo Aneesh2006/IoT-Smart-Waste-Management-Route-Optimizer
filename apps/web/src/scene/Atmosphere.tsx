@@ -35,7 +35,9 @@ export function Atmosphere({ center }: { center: { x: number; z: number } }) {
   }, [scene, center.x, center.z]);
 
   useFrame(() => {
-    const hour = (sim.time % DAY) / HOUR;
+    const { replay } = useApp.getState();
+    const time = replay ? (sim.tape[replay.index]?.time ?? sim.time) : sim.time;
+    const hour = (time % DAY) / HOUR;
     lightingAt(hour, light);
     if (scene.background instanceof Color) scene.background.copy(light.sky);
     if (scene.fog) scene.fog.color.copy(light.sky);

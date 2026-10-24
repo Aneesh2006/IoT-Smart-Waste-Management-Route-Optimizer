@@ -26,12 +26,18 @@ function useHotkeys() {
         if (s.guideOpen) return s.setGuideOpen(false);
         if (s.editorOpen) return s.setEditorOpen(false);
         if (s.xrayOpen) return s.setXrayOpen(false);
+        if (s.replay) return s.exitReplay();
         s.selectBin(null);
         s.selectTruck(null);
       } else if (e.key === 'c') {
         s.setCompareOpen(!s.compareOpen);
       } else if (e.key === 'l') {
         s.setLabOpen(!s.labOpen);
+      } else if (e.key === 'r') {
+        if (s.replay) s.exitReplay();
+        else s.startReplay();
+      } else if (e.key === 'g') {
+        s.cycleHeatmap();
       } else if (e.key === 'x') {
         s.setXrayOpen(!s.xrayOpen);
       } else if (e.key === '?' || e.key === 'h') {

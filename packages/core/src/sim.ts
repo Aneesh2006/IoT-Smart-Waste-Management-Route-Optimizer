@@ -104,6 +104,9 @@ export interface BinState {
   noise: number;
   hourStartReading: number;
   collectedThisHour: boolean;
+  /** Lifetime totals, for heatmaps. */
+  generatedL: number;
+  overflowHours: number;
 }
 
 export type TruckStatus = 'idle' | 'driving' | 'collecting' | 'unloading' | 'returning' | 'broken';
@@ -162,6 +165,17 @@ export interface Metrics {
   crewHours: number;
   tippedWetL: number;
   tippedDryL: number;
+  /** Litres collected per district. */
+  collectedByDistrict: Partial<Record<DistrictKind, number>>;
+}
+
+/** A compact recording of the city every sensor sample, for time-lapse replay. */
+export interface TapeFrame {
+  time: number;
+  fills: Float32Array;
+  /** x, z, heading per truck. */
+  trucks: Float32Array;
+  overflowing: number;
 }
 
 export interface Snapshot {
@@ -206,6 +220,7 @@ const emptyMetrics = (): Metrics => ({
   crewHours: 0,
   tippedWetL: 0,
   tippedDryL: 0,
+  collectedByDistrict: {},
 });
 
 export class Simulation {
@@ -217,6 +232,7 @@ export class Simulation {
   trucks: TruckState[];
   metrics: Metrics = emptyMetrics();
   snapshots: Snapshot[] = [];
+  tape: TapeFrame[] = [];
   events: SimEvent[] = [];
   lastPlan: ShiftPlan | null = null;
   /** Bumped whenever routes change, so renderers know to rebuild ribbons. */
@@ -274,6 +290,8 @@ export class Simulation {
         noise: 1,
         hourStartReading: start,
         collectedThisHour: false,
+        generatedL: 0,
+        overflowHours: 0,
       };
     });
 
@@ -384,7 +402,10 @@ export class Simulation {
     for (const truck of this.trucks) this.moveTruck(truck, h);
     this.time = t1;
 
-    if (Math.floor(t1 / SAMPLE_SECONDS) !== Math.floor(t0 / SAMPLE_SECONDS)) this.sampleSensors();
+    if (Math.floor(t1 / SAMPLE_SECONDS) !== Math.floor(t0 / SAMPLE_SECONDS)) {
+      this.sampleSensors();
+      this.record();
+    }
     for (let k = 0; k < this.config.shifts.length; k++) {
       const start = this.config.shifts[k].start * HOUR;
       const a = t0 % DAY;
@@ -435,6 +456,7 @@ export class Simulation {
       let rate = profileRate(site.district, t0) * site.busyness * b.noise;
       for (const boost of this.boosts) if (boost.district === site.district) rate *= boost.factor;
       b.fill += (rate * h) / HOUR;
+      b.generatedL += ((rate * h) / HOUR) * site.capacityL;
       if (b.fill >= 1) {
         if (!b.overflowing) {
           b.overflowing = true;
@@ -442,6 +464,7 @@ export class Simulation {
           this.log('overflow', `${site.label} is overflowing.`, { binId: b.id });
         }
         this.metrics.overflowBinHours += h / HOUR;
+        b.overflowHours += h / HOUR;
       }
     }
   }
@@ -677,6 +700,7 @@ export class Simulation {
       if (b.fill < COSTS.wastedBelow) this.metrics.wastedVisits++;
       this.metrics.visits++;
       this.metrics.collectedL += litres;
+      this.metrics.collectedByDistrict[site.district] = (this.metrics.collectedByDistrict[site.district] ?? 0) + litres;
       t.load += litres;
       b.fill -= litres / site.capacityL;
       if (b.fill < 1) b.overflowing = false;
@@ -904,6 +928,19 @@ export class Simulation {
     }
     if (count) this.routeVersion++;
     return count;
+  }
+
+  private record() {
+    const fills = new Float32Array(this.bins.length);
+    let overflowing = 0;
+    this.bins.forEach((b, i) => {
+      fills[i] = b.fill;
+      if (b.fill >= 1) overflowing++;
+    });
+    const trucks = new Float32Array(this.trucks.length * 3);
+    this.trucks.forEach((t, i) => trucks.set([t.x, t.z, t.heading], i * 3));
+    this.tape.push({ time: this.time, fills, trucks, overflowing });
+    if (this.tape.length > 14 * 96) this.tape.shift();
   }
 
   private snapshot() {
