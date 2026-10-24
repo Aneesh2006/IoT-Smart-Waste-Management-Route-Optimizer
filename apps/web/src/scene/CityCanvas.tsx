@@ -10,6 +10,7 @@ import { Bins } from './Bins.tsx';
 import { Buildings } from './Buildings.tsx';
 import { Facilities } from './Facilities.tsx';
 import { Greenery } from './Greenery.tsx';
+import { Hazards } from './Hazards.tsx';
 import { Ground } from './Ground.tsx';
 import { Roads } from './Roads.tsx';
 import { Trucks } from './Trucks.tsx';
@@ -78,6 +79,7 @@ function World() {
       <Greenery city={city} />
       <Facilities city={city} />
       <Bins city={city} />
+      <Hazards city={city} />
       <Trucks />
     </group>
   );

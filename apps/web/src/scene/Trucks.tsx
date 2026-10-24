@@ -22,7 +22,10 @@ function TruckBody({ truck, color }: { truck: TruckState; color: string }) {
     if (!g) return;
     g.position.set(truck.x, 0.2, truck.z);
     g.rotation.y = truck.heading;
-    lights.color.copy(glow.set('#fff3c4').multiplyScalar(0.6 + nightUniform.value * 4));
+    if (truck.status === 'broken') {
+      const on = Math.sin(performance.now() / 160) > 0;
+      lights.color.copy(glow.set('#ff9a1a').multiplyScalar(on ? 4 : 0.2));
+    } else lights.color.copy(glow.set('#fff3c4').multiplyScalar(0.6 + nightUniform.value * 4));
   });
 
   const onClick = (e: ThreeEvent<MouseEvent>) => {
@@ -57,10 +60,10 @@ function TruckBody({ truck, color }: { truck: TruckState; color: string }) {
             <boxGeometry args={[0.45, 0.3, 0.06]} />
           </mesh>
         ))}
-        {/* beacon on the roof */}
-        <mesh position={[0, 3.1, 2.9]}>
+        {/* beacon on the roof (flashes amber when broken down) */}
+        <mesh position={[0, 3.1, 2.9]} material={truck.status === 'broken' ? lights : undefined}>
           <boxGeometry args={[0.8, 0.3, 0.4]} />
-          <meshBasicMaterial color={color} toneMapped={false} />
+          {truck.status !== 'broken' && <meshBasicMaterial color={color} toneMapped={false} />}
         </mesh>
         {[-2.6, 0.2, 2.8].map((z) =>
           [-1.25, 1.25].map((x) => (
@@ -87,6 +90,7 @@ function TruckChip({ truck, color }: { truck: TruckState; color: string }) {
       >
         <span className="size-1.5 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }} />
         T{truck.id + 1}
+        {truck.status === 'broken' && <span className="text-amber">⚠</span>}
         <span className="h-1 w-8 overflow-hidden rounded-full bg-white/10">
           <span className="block h-full rounded-full" style={{ width: `${Math.min(100, load * 100)}%`, background: color }} />
         </span>
@@ -113,7 +117,7 @@ function RouteRibbons() {
   useApp((s) => s.tick);
   const selected = useApp((s) => s.selectedTruck);
   const version = sim.routeVersion;
-  const routes = sim.trucks.map((t) => t.route);
+  const routes = sim.trucks.map((t) => (t.status === 'broken' ? null : t.route));
   const ribbons = useMemo(
     () =>
       routes.map((r) => (r ? r.xs.map((x, i) => [x, 1.6, r.zs[i]] as [number, number, number]) : null)),

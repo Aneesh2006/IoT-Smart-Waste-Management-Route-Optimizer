@@ -1,4 +1,4 @@
-import { Simulation, type Construction, type PolicyId } from '@binsight/core';
+import { Simulation, type ChaosKind, type Construction, type PolicyId } from '@binsight/core';
 import { create } from 'zustand';
 
 export const SPEEDS = [10, 60, 300, 1200, 3600] as const;
@@ -22,6 +22,7 @@ interface AppState {
   /** Ghost the buildings so the data layer (bins, routes) stands out. */
   dataView: boolean;
   compareOpen: boolean;
+  compareScenario: ChaosKind | 'none';
   labOpen: boolean;
 
   bump(): void;
@@ -40,6 +41,7 @@ interface AppState {
   setLeftOpen(open: boolean): void;
   toggleDataView(): void;
   setCompareOpen(open: boolean): void;
+  setCompareScenario(s: ChaosKind | 'none'): void;
   setLabOpen(open: boolean): void;
 }
 
@@ -64,6 +66,7 @@ export const useApp = create<AppState>((set, get) => ({
   leftOpen: typeof window !== 'undefined' ? window.innerWidth >= 900 : true,
   dataView: false,
   compareOpen: false,
+  compareScenario: 'none',
   labOpen: false,
 
   bump: () => set((s) => ({ tick: s.tick + 1 })),
@@ -124,4 +127,5 @@ export const useApp = create<AppState>((set, get) => ({
   toggleDataView: () => set((s) => ({ dataView: !s.dataView })),
   setCompareOpen: (open) => set({ compareOpen: open, labOpen: false }),
   setLabOpen: (open) => set({ labOpen: open, compareOpen: false }),
+  setCompareScenario: (compareScenario) => set({ compareScenario }),
 }));

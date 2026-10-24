@@ -1,10 +1,10 @@
 import { generateCity } from './city.ts';
-import { DistanceTable, edgeBetween } from './graph.ts';
+import { DistanceTable, edgeBetween, isConnected } from './graph.ts';
 import { POLICIES, type PolicyContext, type PolicyId } from './policies.ts';
 import { DAY, HOUR, formatClock, profileRate } from './profiles.ts';
 import { createRng, type Rng } from './rng.ts';
 import { solveVrp, type Construction, type TruckPlan, type VrpSolution, type VrpStop } from './routing/cvrp.ts';
-import type { City } from './types.ts';
+import type { City, DistrictKind } from './types.ts';
 
 export interface ShiftWindow {
   start: number;
@@ -23,7 +23,27 @@ export interface SimConfig {
   improve: boolean;
   /** Hour of Monday the clock starts at. */
   startHour: number;
+  /** Disruptions scheduled in advance (Compare uses this to replay a scenario under every policy). */
+  events: ChaosEvent[];
 }
+
+export type ChaosKind = 'festival' | 'flood' | 'breakdown' | 'sensors' | 'fire';
+
+export interface ChaosEvent {
+  /** Sim time, seconds. */
+  at: number;
+  kind: ChaosKind;
+}
+
+export const CHAOS_INFO: Record<ChaosKind, { name: string; question: string }> = {
+  festival: { name: 'Festival night', question: 'What happens when the forecast is wrong?' },
+  flood: { name: 'Monsoon flooding', question: 'What if a main road goes under water?' },
+  breakdown: { name: 'Truck breakdown', question: 'What if a truck dies mid-route?' },
+  sensors: { name: 'Sensors go dark', question: 'What does a dead sensor cost?' },
+  fire: { name: 'Bin fire', question: 'Can the system react to an emergency?' },
+};
+
+export const CHAOS_ORDER: ChaosKind[] = ['festival', 'flood', 'breakdown', 'sensors', 'fire'];
 
 export const DEFAULT_CONFIG: SimConfig = {
   seed: 'binsight',
@@ -39,6 +59,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   construction: 'savings',
   improve: true,
   startHour: 5,
+  events: [],
 };
 
 /** Assumptions behind every rupee and kilogram on screen; keep them in one place. */
@@ -82,7 +103,7 @@ export interface BinState {
   collectedThisHour: boolean;
 }
 
-export type TruckStatus = 'idle' | 'driving' | 'collecting' | 'unloading' | 'returning';
+export type TruckStatus = 'idle' | 'driving' | 'collecting' | 'unloading' | 'returning' | 'broken';
 
 export interface RouteStop {
   /** Distance along the route, metres. */
@@ -93,6 +114,8 @@ export interface RouteStop {
 }
 
 export interface Route {
+  /** Graph node at each point, or -1 for a point partway along a road. */
+  nodes: number[];
   xs: number[];
   zs: number[];
   cum: number[];
@@ -119,6 +142,8 @@ export interface TruckState {
   odometer: number;
   busySeconds: number;
   binsToday: number;
+  /** When a broken-down truck is back in service. */
+  brokenUntil: number;
 }
 
 export interface Metrics {
@@ -146,7 +171,7 @@ export interface Snapshot {
   overflowEvents: number;
 }
 
-export type EventKind = 'plan' | 'overflow' | 'unload' | 'return' | 'info' | 'warn';
+export type EventKind = 'plan' | 'overflow' | 'unload' | 'return' | 'info' | 'warn' | 'alert';
 
 export interface SimEvent {
   id: number;
@@ -193,9 +218,18 @@ export class Simulation {
   lastPlan: ShiftPlan | null = null;
   /** Bumped whenever routes change, so renderers know to rebuild ribbons. */
   routeVersion = 0;
+  /** Bumped whenever roads close or reopen. */
+  roadVersion = 0;
+  /** Burning bins and when they burn out. */
+  fires = new Map<number, number>();
+  closures: { edges: number[]; until: number; name: string }[] = [];
+  private boosts: { district: DistrictKind; factor: number; until: number }[] = [];
+  private sensorRepairs: { bins: number[]; at: number }[] = [];
+  private pending: ChaosEvent[];
   private eventId = 0;
   private rFill: Rng;
   private rSensor: Rng;
+  private rChaos: Rng;
 
   constructor(config: Partial<SimConfig> = {}, city?: City) {
     const given = Object.fromEntries(Object.entries(config).filter(([, v]) => v !== undefined)) as Partial<SimConfig>;
@@ -206,6 +240,9 @@ export class Simulation {
     const rng = createRng(this.config.seed);
     this.rFill = rng.fork('fill');
     this.rSensor = rng.fork('sensor');
+    this.rChaos = rng.fork('chaos');
+    this.config.events = this.config.events.map((e) => ({ ...e }));
+    this.pending = [...this.config.events].sort((a, b) => a.at - b.at);
     const rInit = rng.fork('init');
     this.time = this.config.startHour * HOUR;
 
@@ -252,6 +289,7 @@ export class Simulation {
       odometer: 0,
       busySeconds: 0,
       binsToday: 0,
+      brokenUntil: 0,
     }));
     this.snapshot();
     this.log('info', `City "${this.config.seed}" online: ${this.bins.length} smart bins, ${this.trucks.length} trucks.`);
@@ -347,6 +385,8 @@ export class Simulation {
       const b = a + h;
       if (a < start && b >= start) this.planShift(k);
     }
+    while (this.pending.length && this.pending[0].at <= t1) this.applyChaos(this.pending.shift()!.kind);
+    if (Math.floor(t1 / 60) !== Math.floor(t0 / 60)) this.expireChaos();
     if (Math.floor(t1 / HOUR) !== Math.floor(t0 / HOUR)) {
       this.snapshot();
       this.maybeReplan();
@@ -385,7 +425,8 @@ export class Simulation {
     const sites = this.city.bins;
     for (const b of this.bins) {
       const site = sites[b.id];
-      const rate = profileRate(site.district, t0) * site.busyness * b.noise;
+      let rate = profileRate(site.district, t0) * site.busyness * b.noise;
+      for (const boost of this.boosts) if (boost.district === site.district) rate *= boost.factor;
       b.fill += (rate * h) / HOUR;
       if (b.fill >= 1) {
         if (!b.overflowing) {
@@ -416,6 +457,10 @@ export class Simulation {
       const wet = site.stream === 'wet';
       b.temperature = ambient + (wet ? 7 : 2) * Math.min(1, b.fill) + this.rSensor.normal(0, 0.4);
       b.gas = (wet ? 30 + 520 * Math.min(1, b.fill) * Math.min(1, ageH / 36) : 12 + 40 * Math.min(1, b.fill)) + this.rSensor.normal(0, 3);
+      if (this.fires.has(b.id)) {
+        b.temperature = 78 + this.rSensor.range(0, 25);
+        b.gas = 900 + this.rSensor.range(0, 400);
+      }
 
       if (hourBoundary) {
         // Learn the bin's rhythm from the last hour, unless a truck emptied it meanwhile.
@@ -484,30 +529,8 @@ export class Simulation {
     }
     seq.push({ node: this.city.depot.node, kind: 'depot' });
 
-    const nodes = this.city.nodes;
-    const route: Route = { xs: [], zs: [], cum: [], speeds: [], stops: [], length: 0 };
-    let cur = this.city.depot.node;
-    route.xs.push(nodes[cur].x);
-    route.zs.push(nodes[cur].z);
-    route.cum.push(0);
-    for (const s of seq) {
-      const path = this.table.path(cur, s.node);
-      if (path.length === 0) {
-        this.log('warn', `${truck.name} cannot reach a stop: the road is cut.`, { truckId: truck.id });
-        continue;
-      }
-      for (let k = 1; k < path.length; k++) {
-        const edge = edgeBetween(this.city, path[k - 1], path[k])!;
-        route.length += edge.length;
-        route.xs.push(nodes[path[k]].x);
-        route.zs.push(nodes[path[k]].z);
-        route.cum.push(route.length);
-        route.speeds.push(edge.speed);
-      }
-      route.stops.push({ at: route.length, kind: s.kind, node: s.node, binId: s.binId });
-      if (s.binId !== undefined) this.bins[s.binId].assigned = truck.id;
-      cur = s.node;
-    }
+    const depot = this.city.nodes[this.city.depot.node];
+    const route = this.buildRoute(truck, depot.x, depot.z, this.city.depot.node, seq);
     truck.route = route;
     truck.d = 0;
     truck.seg = 0;
@@ -519,9 +542,57 @@ export class Simulation {
     truck.z = route.zs[0];
   }
 
+  /**
+   * Road route from a point (on node `startNode`, or partway along a road toward
+   * it) through a sequence of stops. Unreachable stops are skipped and logged.
+   */
+  private buildRoute(
+    truck: TruckState,
+    x: number,
+    z: number,
+    startNode: number,
+    seq: { node: number; kind: RouteStop['kind']; binId?: number }[],
+  ): Route {
+    const nodes = this.city.nodes;
+    const route: Route = { nodes: [startNode], xs: [x], zs: [z], cum: [0], speeds: [], stops: [], length: 0 };
+    const lead = Math.hypot(nodes[startNode].x - x, nodes[startNode].z - z);
+    if (lead > 1e-6) {
+      // Partway along a road: finish it first.
+      route.nodes[0] = -1;
+      route.length += lead;
+      route.nodes.push(startNode);
+      route.xs.push(nodes[startNode].x);
+      route.zs.push(nodes[startNode].z);
+      route.cum.push(route.length);
+      route.speeds.push(7);
+    }
+    let cur = startNode;
+    for (const s of seq) {
+      const path = this.table.path(cur, s.node);
+      if (path.length === 0) {
+        this.log('warn', `${truck.name} cannot reach a stop: the road is cut.`, { truckId: truck.id });
+        if (s.binId !== undefined) this.bins[s.binId].assigned = -1;
+        continue;
+      }
+      for (let k = 1; k < path.length; k++) {
+        const edge = edgeBetween(this.city, path[k - 1], path[k])!;
+        route.length += edge.length;
+        route.nodes.push(path[k]);
+        route.xs.push(nodes[path[k]].x);
+        route.zs.push(nodes[path[k]].z);
+        route.cum.push(route.length);
+        route.speeds.push(edge.speed);
+      }
+      route.stops.push({ at: route.length, kind: s.kind, node: s.node, binId: s.binId });
+      if (s.binId !== undefined) this.bins[s.binId].assigned = truck.id;
+      cur = s.node;
+    }
+    return route;
+  }
+
   private moveTruck(t: TruckState, h: number) {
     const route = t.route;
-    if (!route) return;
+    if (!route || t.status === 'broken') return;
     let time = h;
     const startOdo = t.odometer;
     while (time > 1e-9 && t.route) {
@@ -606,6 +677,7 @@ export class Simulation {
       b.collections++;
       b.assigned = -1;
       b.collectedThisHour = true;
+      if (this.fires.delete(b.id)) this.log('info', `${site.label}: fire put out by ${t.name}'s crew.`, { binId: b.id });
       t.binsToday++;
       t.serviceLeft = COSTS.serviceSeconds;
       t.status = 'collecting';
@@ -637,6 +709,194 @@ export class Simulation {
       if (this.city.bins[s.binId].stream === 'wet') wet++;
     }
     return all ? wet / all : 0.5;
+  }
+
+  /** Trigger a disruption right now (the Chaos buttons). */
+  trigger(kind: ChaosKind) {
+    this.applyChaos(kind);
+  }
+
+  private applyChaos(kind: ChaosKind) {
+    const r = this.rChaos;
+    switch (kind) {
+      case 'festival': {
+        this.boosts.push({ district: 'market', factor: 3.2, until: this.time + 10 * HOUR });
+        this.boosts.push({ district: 'park', factor: 2, until: this.time + 10 * HOUR });
+        this.log('alert', 'Festival night: market waste ×3 and parks ×2 for 10 hours. The forecaster has never seen this.');
+        break;
+      }
+      case 'flood': {
+        const closed = this.closeArterial(r);
+        if (!closed) {
+          this.log('warn', 'Flood: no main road could close without cutting the city in two.');
+          break;
+        }
+        this.closures.push({ ...closed, until: this.time + 12 * HOUR });
+        this.roadVersion++;
+        this.table.invalidate();
+        const rerouted = this.rerouteAll();
+        const metres = closed.edges.reduce((s, e) => s + this.city.edges[e].length, 0);
+        this.log('alert', `Monsoon flooding closes ${Math.round(metres)} m of ${closed.name} for 12 h. ${rerouted} truck${rerouted === 1 ? '' : 's'} re-routed.`);
+        break;
+      }
+      case 'breakdown': {
+        const busy = this.trucks.filter((t) => t.route && t.status !== 'broken' && t.status !== 'returning');
+        const t = busy.length ? r.pick(busy) : null;
+        if (!t) {
+          this.log('warn', 'Breakdown: every truck is parked, nothing to break.');
+          break;
+        }
+        let released = 0;
+        for (const s of t.route!.stops.slice(t.stopIndex)) {
+          if (s.binId !== undefined && this.bins[s.binId].assigned === t.id) {
+            this.bins[s.binId].assigned = -1;
+            released++;
+          }
+        }
+        t.status = 'broken';
+        t.brokenUntil = this.time + 4 * HOUR;
+        this.routeVersion++;
+        this.log('alert', `${t.name} broke down with ${released} bins still to collect. Towing in 4 h.`, { truckId: t.id });
+        break;
+      }
+      case 'sensors': {
+        const live = this.bins.filter((b) => b.sensorOk);
+        const dead = r.shuffle(live).slice(0, Math.min(8, live.length));
+        for (const b of dead) {
+          b.sensorOk = false;
+          b.battery = 0;
+        }
+        this.sensorRepairs.push({ bins: dead.map((b) => b.id), at: this.time + 24 * HOUR });
+        this.log('alert', `${dead.length} bin sensors went dark. Their last reading is all the planner has until the technician's round tomorrow.`);
+        break;
+      }
+      case 'fire': {
+        const candidates = this.bins.filter((b) => !this.fires.has(b.id) && b.fill > 0.4 && this.city.bins[b.id].stream === 'wet');
+        const b = candidates.length ? r.pick(candidates) : r.pick(this.bins);
+        this.fires.set(b.id, this.time + 3 * HOUR);
+        const site = this.city.bins[b.id];
+        b.temperature = 85;
+        b.gas = 1100;
+        this.log('alert', `Fire in ${site.label}: 85 °C and smoke on the gas sensor.`, { binId: b.id });
+        if (b.assigned === -1) {
+          if (this.trucks.some((t) => t.status === 'idle')) this.plan(Math.max(0, this.shiftAt()), [b.id], 'Emergency');
+          else this.log('warn', `No truck free for ${site.label}; it waits for the next one back.`, { binId: b.id });
+        }
+        break;
+      }
+    }
+  }
+
+  /** Called once a sim-minute: lift disruptions whose time is up. */
+  private expireChaos() {
+    const now = this.time;
+    this.boosts = this.boosts.filter((b) => b.until > now);
+    for (const [id, until] of this.fires) {
+      if (until > now) continue;
+      this.fires.delete(id);
+      this.bins[id].fill *= 0.6;
+      this.log('info', `${this.city.bins[id].label}: fire burnt itself out.`, { binId: id });
+    }
+    const open = this.closures.filter((c) => c.until <= now);
+    if (open.length) {
+      for (const c of open) for (const e of c.edges) this.city.edges[e].closed = false;
+      this.closures = this.closures.filter((c) => c.until > now);
+      this.roadVersion++;
+      this.table.invalidate();
+      this.log('info', `Flood water receded; ${open.map((c) => c.name).join(', ')} open again.`);
+    }
+    for (const rep of this.sensorRepairs.filter((x) => x.at <= now)) {
+      for (const id of rep.bins) {
+        this.bins[id].sensorOk = true;
+        this.bins[id].battery = 100;
+      }
+      this.log('info', `Technician replaced ${rep.bins.length} dead sensors.`);
+    }
+    this.sensorRepairs = this.sensorRepairs.filter((x) => x.at > now);
+    for (const t of this.trucks) {
+      if (t.status !== 'broken' || t.brokenUntil > now) continue;
+      t.status = 'idle';
+      t.route = null;
+      t.load = 0;
+      t.x = this.city.depot.x;
+      t.z = this.city.depot.z;
+      this.routeVersion++;
+      this.log('info', `${t.name} towed back and repaired.`, { truckId: t.id });
+    }
+    // An unattended fire gets the next idle truck.
+    for (const id of this.fires.keys()) {
+      if (this.bins[id].assigned !== -1 || !this.trucks.some((t) => t.status === 'idle')) continue;
+      this.plan(Math.max(0, this.shiftAt()), [id], 'Emergency');
+    }
+  }
+
+  /** Close a run of arterial road near the centre, keeping the city connected. */
+  private closeArterial(r: Rng): { edges: number[]; name: string } | null {
+    const { x0, x1, z0, z1 } = this.city.bounds;
+    const cx = (x0 + x1) / 2;
+    const cz = (z0 + z1) / 2;
+    const nodes = this.city.nodes;
+    const arterials = this.city.edges.filter((e) => e.arterial && !e.closed && nodes[e.a].kind !== 'depot' && nodes[e.b].kind !== 'depot' && nodes[e.a].kind !== 'landfill' && nodes[e.b].kind !== 'landfill' && nodes[e.a].kind !== 'recycling' && nodes[e.b].kind !== 'recycling');
+    const central = arterials
+      .map((e) => ({ e, d: Math.hypot((nodes[e.a].x + nodes[e.b].x) / 2 - cx, (nodes[e.a].z + nodes[e.b].z) / 2 - cz) }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 12);
+    if (!central.length) return null;
+    const seed = r.pick(central).e;
+    const horizontal = Math.abs(nodes[seed.a].z - nodes[seed.b].z) < 1;
+    const along = horizontal ? nodes[seed.a].z : nodes[seed.a].x;
+    // Grow along the same straight road to about 350 m.
+    const chain = new Set([seed.id]);
+    let total = seed.length;
+    let grew = true;
+    while (grew && total < 350) {
+      grew = false;
+      for (const e of arterials) {
+        if (chain.has(e.id)) continue;
+        const sameLine = horizontal
+          ? Math.abs(nodes[e.a].z - along) < 1 && Math.abs(nodes[e.b].z - along) < 1
+          : Math.abs(nodes[e.a].x - along) < 1 && Math.abs(nodes[e.b].x - along) < 1;
+        if (!sameLine) continue;
+        const touches = [...chain].some((c) => {
+          const ce = this.city.edges[c];
+          return ce.a === e.a || ce.a === e.b || ce.b === e.a || ce.b === e.b;
+        });
+        if (!touches) continue;
+        chain.add(e.id);
+        total += e.length;
+        grew = true;
+        break;
+      }
+    }
+    const closedIds: number[] = [];
+    for (const id of chain) {
+      this.city.edges[id].closed = true;
+      if (isConnected(this.city)) closedIds.push(id);
+      else this.city.edges[id].closed = false;
+    }
+    if (!closedIds.length) return null;
+    return { edges: closedIds, name: horizontal ? 'an east–west avenue' : 'a north–south avenue' };
+  }
+
+  /** Re-plan the remaining stops of every moving truck on the current road network. */
+  private rerouteAll(): number {
+    let count = 0;
+    for (const t of this.trucks) {
+      const route = t.route;
+      if (!route || t.status === 'broken') continue;
+      const next = route.nodes.slice(t.seg + 1).find((n) => n >= 0);
+      if (next === undefined) continue;
+      const seq = route.stops.slice(t.stopIndex).map((s) => ({ node: s.node, kind: s.kind, binId: s.binId }));
+      for (const s of seq) if (s.binId !== undefined) this.bins[s.binId].assigned = -1;
+      const fresh = this.buildRoute(t, t.x, t.z, next, seq);
+      t.route = fresh;
+      t.d = 0;
+      t.seg = 0;
+      t.stopIndex = 0;
+      count++;
+    }
+    if (count) this.routeVersion++;
+    return count;
   }
 
   private snapshot() {

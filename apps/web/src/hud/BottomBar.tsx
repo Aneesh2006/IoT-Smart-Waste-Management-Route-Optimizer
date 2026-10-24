@@ -1,5 +1,5 @@
 import { formatClock, type EventKind } from '@binsight/core';
-import { AlertTriangle, ArrowDownToLine, Home, Info, Route, Siren } from 'lucide-react';
+import { AlertTriangle, ArrowDownToLine, Home, Info, Route, Siren, Zap } from 'lucide-react';
 import { STREAM_COLORS } from '../lib/colors.ts';
 import { useApp } from '../state/store.ts';
 import { Panel } from './ui.tsx';
@@ -11,6 +11,7 @@ const KIND: Record<EventKind, { icon: React.ReactNode; color: string }> = {
   return: { icon: <Home size={12} />, color: '#94a3b8' },
   info: { icon: <Info size={12} />, color: '#94a3b8' },
   warn: { icon: <AlertTriangle size={12} />, color: '#fb923c' },
+  alert: { icon: <Zap size={12} />, color: '#f472b6' },
 };
 
 export function BottomBar() {

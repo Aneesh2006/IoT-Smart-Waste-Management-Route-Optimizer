@@ -97,7 +97,9 @@ export function Bins({ city }: { city: City }) {
       if (st.fill >= 1) glow = 1.9 + Math.sin(t * 6 + i) * 0.5;
       else if (st.fill >= 0.8) glow = 1.6 + Math.sin(t * 3 + i) * 0.35;
       if (i === hoveredBin || i === selectedBin) glow += 0.8;
-      fm.setColorAt(i, fillColor(st.fill, c).multiplyScalar(glow));
+      if (st.sensorOk) fillColor(st.fill, c).multiplyScalar(glow);
+      else c.set('#475569').multiplyScalar(0.6 + 0.25 * Math.sin(t * 2 + i));
+      fm.setColorAt(i, c);
 
       if (st.fill >= 1) {
         o.position.set(site.x, BASE_Y + BIN_HEIGHT, site.z);

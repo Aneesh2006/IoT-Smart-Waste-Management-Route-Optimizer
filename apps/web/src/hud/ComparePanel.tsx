@@ -1,4 +1,4 @@
-import { POLICIES, POLICY_ORDER, WEEKDAYS, type CompareRow, type Metrics, type PolicyId } from '@binsight/core';
+import { CHAOS_INFO, CHAOS_ORDER, POLICIES, POLICY_ORDER, WEEKDAYS, type ChaosEvent, type ChaosKind, type CompareRow, type Metrics, type PolicyId } from '@binsight/core';
 import { Loader2, Scale, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { POLICY_COLORS } from '../lib/colors.ts';
@@ -25,10 +25,18 @@ const COLUMNS: Column[] = [
   { key: 'litter', label: 'Litter', value: (m) => m.overflowBinHours, format: (v) => `${v.toFixed(0)} bin-h`, hint: 'Total hours bins spent overflowing' },
 ];
 
+/** When each scenario is scheduled in a compare run: Wednesday, at an hour where it bites. */
+const SCENARIO_HOUR: Record<ChaosKind, number> = { festival: 16, flood: 5.8, breakdown: 6.2, sensors: 6, fire: 16 };
+
+function scenarioEvents(kind: ChaosKind | 'none'): ChaosEvent[] {
+  return kind === 'none' ? [] : [{ at: 2 * 86400 + SCENARIO_HOUR[kind] * 3600, kind }];
+}
+
 export function ComparePanel() {
   const open = useApp((s) => s.compareOpen);
   const sim = useApp((s) => s.sim);
-  const { setCompareOpen } = useApp.getState();
+  const scenario = useApp((s) => s.compareScenario);
+  const { setCompareOpen, setCompareScenario } = useApp.getState();
   const [days, setDays] = useState(7);
   const [rows, setRows] = useState<CompareRow[]>([]);
   const [running, setRunning] = useState(false);
@@ -44,9 +52,9 @@ export function ComparePanel() {
         setRows((r) => [...r, row]);
       } else setRunning(false);
     };
-    worker.postMessage({ config: structuredClone(sim.config), days });
+    worker.postMessage({ config: { ...structuredClone(sim.config), events: scenarioEvents(scenario) }, days });
     return () => worker.terminate();
-  }, [open, days, sim]);
+  }, [open, days, sim, scenario]);
 
   if (!open) return null;
 
@@ -68,7 +76,20 @@ export function ComparePanel() {
                 Nothing here touches the live simulation.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <select
+                value={scenario}
+                onChange={(e) => setCompareScenario(e.target.value as ChaosKind | 'none')}
+                className="rounded-lg bg-white/[0.06] px-2 py-1 text-[12px] text-slate-200 ring-1 ring-white/10 outline-none"
+                title="Replay a disruption on Wednesday under every policy"
+              >
+                <option value="none">Normal week</option>
+                {CHAOS_ORDER.map((k) => (
+                  <option key={k} value={k}>
+                    {CHAOS_INFO[k].name} on Wednesday
+                  </option>
+                ))}
+              </select>
               <Segmented
                 size="sm"
                 value={days}

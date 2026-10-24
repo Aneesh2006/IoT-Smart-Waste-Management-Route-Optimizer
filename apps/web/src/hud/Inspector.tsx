@@ -12,6 +12,7 @@ const STATUS_LABEL = {
   collecting: 'Collecting',
   unloading: 'Tipping',
   returning: 'Returning',
+  broken: 'Broken down',
 } as const;
 
 export function Inspector() {
@@ -50,6 +51,8 @@ function BinCard({ sim, id }: { sim: Simulation; id: number }) {
               {site.stream === 'wet' ? 'Wet waste' : 'Dry waste'}
             </span>
             <span className="rounded-full bg-white/5 px-2 py-0.5 text-slate-300 ring-1 ring-white/10">{site.capacityL} L</span>
+            {!st.sensorOk && <span className="rounded-full bg-slate-500/20 px-2 py-0.5 text-slate-300 ring-1 ring-slate-400/30">Sensor offline</span>}
+            {sim.fires.has(id) && <span className="pulse-ring rounded-full bg-orange-500/20 px-2 py-0.5 text-orange-300 ring-1 ring-orange-400/50">Fire</span>}
           </div>
         </div>
         <div className="flex gap-1.5">

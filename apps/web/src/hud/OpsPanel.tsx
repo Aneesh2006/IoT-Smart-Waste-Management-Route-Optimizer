@@ -1,10 +1,18 @@
-import { COSTS, POLICIES, POLICY_ORDER, type Construction } from '@binsight/core';
-import { FlaskConical, Route, Scale, Zap } from 'lucide-react';
+import { CHAOS_INFO, CHAOS_ORDER, COSTS, POLICIES, POLICY_ORDER, type ChaosKind, type Construction } from '@binsight/core';
+import { CloudRain, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
 import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
 import { Sparkline } from './Sparkline.tsx';
 import { Bar, Panel, Section, Segmented, Stat } from './ui.tsx';
+
+const CHAOS_ICON: Record<ChaosKind, React.ReactNode> = {
+  festival: <PartyPopper size={15} />,
+  flood: <CloudRain size={15} />,
+  breakdown: <Wrench size={15} />,
+  sensors: <WifiOff size={15} />,
+  fire: <Flame size={15} />,
+};
 
 export function OpsPanel() {
   useApp((s) => s.tick);
@@ -124,6 +132,28 @@ export function OpsPanel() {
         >
           <Scale size={14} /> Compare all policies
         </button>
+      </Section>
+
+      <Section title="Chaos lab" hint="Break something and watch the city cope">
+        <div className="space-y-1">
+          {CHAOS_ORDER.map((kind) => (
+            <button
+              key={kind}
+              onClick={() => {
+                sim.trigger(kind);
+                useApp.getState().bump();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl bg-white/[0.02] px-2.5 py-1.5 text-left ring-1 ring-white/5 transition hover:bg-pink-500/10 hover:ring-pink-400/40"
+            >
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-pink-500/10 text-pink-300">{CHAOS_ICON[kind]}</span>
+              <span className="leading-tight">
+                <span className="block text-[12px] font-semibold text-slate-200">{CHAOS_INFO[kind].name}</span>
+                <span className="block text-[10.5px] text-slate-500">{CHAOS_INFO[kind].question}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[10.5px] leading-snug text-slate-500">Each one also runs under every policy in Compare, scheduled for Wednesday.</p>
       </Section>
 
       <Section
