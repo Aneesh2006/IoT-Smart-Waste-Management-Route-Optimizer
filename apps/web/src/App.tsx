@@ -61,6 +61,8 @@ function useHotkeys() {
         void import('./present/scenes.ts').then((m) => m.startPresentation());
       } else if (e.key === 'i') {
         s.setImpactOpen(!s.impactOpen);
+      } else if (e.key === 's') {
+        void import('./scene/Snapshot.tsx').then((m) => m.requestSnapshot());
       } else if (e.key === 'g') {
         s.cycleHeatmap();
       } else if (e.key === 'x') {

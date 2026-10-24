@@ -16,6 +16,7 @@ import { Heatmap } from './Heatmap.tsx';
 import { NightSky } from './NightSky.tsx';
 import { PhoneBins } from './PhoneBins.tsx';
 import { PickupFx } from './PickupFx.tsx';
+import { SnapshotCapture } from './Snapshot.tsx';
 import { Weather } from './Weather.tsx';
 import { LabelProjector } from './Labels.tsx';
 import { Ground } from './Ground.tsx';
@@ -150,6 +151,7 @@ export function CityCanvas() {
         <CameraRig />
         <FpsWatchdog />
         <CameraProbe />
+        <SnapshotCapture />
         <LabelProjector />
         <MapControls
           makeDefault

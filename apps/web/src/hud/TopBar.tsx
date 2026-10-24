@@ -1,5 +1,5 @@
 import { DAY, HOUR, clockParts } from '@binsight/core';
-import { CircleHelp, Cloud, Flame, Gauge, History, Presentation, Radar, Volume2, VolumeX, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
+import { Camera, CircleHelp, Cloud, Flame, Gauge, History, Presentation, Radar, Volume2, VolumeX, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
 import { SPEEDS, useApp } from '../state/store.ts';
 import { IconButton, Panel, Segmented } from './ui.tsx';
 
@@ -106,6 +106,9 @@ export function TopBar() {
         </IconButton>
         <IconButton onClick={() => void import('../present/scenes.ts').then((m) => m.startPresentation())} title="Present: scripted demo with captions (P)">
           <Presentation size={16} />
+        </IconButton>
+        <IconButton onClick={() => void import('../scene/Snapshot.tsx').then((m) => m.requestSnapshot())} title="Save the view as a PNG for slides (S)">
+          <Camera size={16} />
         </IconButton>
         <IconButton onClick={() => useApp.getState().toggleSound()} title={sound ? 'Sound cues on' : 'Sound cues off'} active={sound}>
           {sound ? <Volume2 size={16} /> : <VolumeX size={16} />}
