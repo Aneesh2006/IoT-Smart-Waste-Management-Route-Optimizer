@@ -117,6 +117,39 @@ export function GuideModal() {
               ]}
             />
 
+            <H>More views</H>
+            <Try
+              items={[
+                <>
+                  <b>Cloud X-Ray</b> (<K>X</K>): every batch of readings flies through IoT Core, SQS, Lambda and DynamoDB with each hop timed, plus what the pipeline would
+                  cost for a real city.
+                </>,
+                <>
+                  <b>Heatmap</b> (<K>G</K>): where bins are full now, where they overflowed longest, or where waste is made. <b>Replay</b> (<K>R</K>) plays the last day back as a
+                  time-lapse.
+                </>,
+                <>
+                  <b>Impact</b> (<K>I</K>): where the waste goes (compost, recycling, landfill), what each truck did all day, and a capacity planner that tests bigger bins
+                  before anyone buys them.
+                </>,
+                <>
+                  <b>Bin inspector</b>: the Inside tab shows the sensor hardware, the MQTT tab the exact message on the wire. <b>Truck inspector</b> opens the crew app
+                  (/driver).
+                </>,
+                <>
+                  <b>Search</b> (<K>/</K>): jump to any bin or truck by name. <b>Results report</b> prints a PDF for the submission. <b>Present</b> (<K>P</K>) runs the
+                  scripted demo.
+                </>,
+              ]}
+            />
+
+            <H>Live on AWS</H>
+            <P>
+              Switch to <b>Live</b> once the stack is deployed: a Lambda replays the city and publishes every bin as an MQTT device to AWS IoT Core, and every pillar you
+              see has travelled IoT Core → SQS → Lambda → DynamoDB → back to the browser. Phones join at <b>/bin</b> by scanning the QR code; operators sign in with Cognito
+              to start the fleet, change speed, pause ingest or reset the city.
+            </P>
+
             <H>Assumptions</H>
             <P>
               Diesel ₹{COSTS.dieselInrPerL}/L at {COSTS.fuelLPerKm} L/km, {COSTS.co2KgPerL} kg CO₂ per litre, crew ₹{COSTS.crewInrPerHour}/h, {COSTS.serviceSeconds} s to empty a

@@ -94,6 +94,14 @@ export const SCENES: Scene[] = [
     },
   },
   {
+    kicker: 'Operations',
+    title: 'Most trucks sit idle',
+    subtitle: 'A day of the fleet: under a smart policy most trucks never leave the depot',
+    enter() {
+      S().setImpactOpen(true);
+    },
+  },
+  {
     kicker: 'Algorithms',
     title: 'Short ≠ optimal',
     subtitle: 'Route heuristics against the exact Held–Karp optimum, on the real road network',

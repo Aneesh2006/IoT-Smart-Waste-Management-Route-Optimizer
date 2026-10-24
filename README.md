@@ -41,8 +41,19 @@ size and speed.
 - **Algorithm lab** (`L`): nearest neighbour, Clarke–Wright, 2-opt, Or-opt,
   simulated annealing and ant colony, scored against the exact Held–Karp optimum;
   plus Dijkstra's wavefront vs A*.
-- **Chaos lab**: festival spike, monsoon flooding, truck breakdown, dead sensors,
-  bin fire.
+- **Chaos lab**: festival spike (with fireworks), monsoon flooding (with rain),
+  truck breakdown, dead sensors, bin fire.
+- **Cloud X-Ray** (`X`): readings flying through the AWS pipeline, timed hop by
+  hop, with CloudWatch counters in Live mode and a cost meter for any city size.
+- **Heatmap** (`G`), **time-lapse replay** (`R`), **minimap**, and a **command
+  palette** (`/` or Ctrl+K) to find any bin or truck.
+- **Impact** (`I`): waste-flow Sankey, a Gantt of the fleet's day, and a
+  capacity planner that tests bigger bins on a seeded week.
+- **Bin inspector** tabs for the sensor hardware and the MQTT message on the wire.
+- **Presentation mode** (`P`), optional sound cues, automatic performance mode,
+  and a printable **results report** for the submission.
+- **Phones**: `/bin` turns a phone into a smart bin with a sorting game;
+  `/driver` is the crew app for one truck (`/driver?demo` works offline).
 
 ## Keys
 
