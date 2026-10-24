@@ -239,10 +239,22 @@ export class LiveWorld extends Simulation {
 
   // ---- helpers
 
+  private nextPickup = 0;
+
   private applyBin(t: Telemetry) {
     const i = Number(t.id);
     const b = this.bins[i];
     if (!b) return;
+    // A big drop between readings means a truck emptied it.
+    if (b.reading - t.r > 0.25) {
+      const near = this.trucks.reduce((best, tr) => {
+        const site = this.city.bins[i];
+        const d = Math.hypot(tr.x - site.x, tr.z - site.z);
+        return d < best.d ? { id: tr.id, d } : best;
+      }, { id: 0, d: Infinity });
+      this.pickups.push({ id: this.nextPickup++, binId: i, truckId: near.id, litres: (b.reading - t.r) * this.city.bins[i].capacityL, time: this.time, wasted: b.reading < 0.3 });
+      if (this.pickups.length > 40) this.pickups.shift();
+    }
     b.reading = t.r;
     b.fill = t.r;
     b.readingAt = t.simT ?? this.time;

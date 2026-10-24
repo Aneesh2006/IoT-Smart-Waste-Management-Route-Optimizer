@@ -17,7 +17,7 @@ function TruckBody({ truck, color }: { truck: TruckState; color: string }) {
   const lights = useMemo(() => new MeshBasicMaterial({ color: '#fff7d6', toneMapped: false }), []);
   const glow = useMemo(() => new Color(), []);
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
     const { replay, sim } = useApp.getState();
@@ -27,7 +27,10 @@ function TruckBody({ truck, color }: { truck: TruckState; color: string }) {
       g.rotation.y = tape.trucks[truck.id * 3 + 2];
     } else {
       g.position.set(truck.x, 0.2, truck.z);
-      g.rotation.y = truck.heading;
+      // Ease the heading round corners instead of snapping.
+      let d = truck.heading - g.rotation.y;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      g.rotation.y += d * Math.min(1, dt * 10);
     }
     if (truck.status === 'broken') {
       const on = Math.sin(performance.now() / 160) > 0;

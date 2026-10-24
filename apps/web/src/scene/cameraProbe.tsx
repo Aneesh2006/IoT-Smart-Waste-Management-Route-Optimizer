@@ -17,6 +17,8 @@ const NDC: [number, number][] = [
 
 export function CameraProbe() {
   const camera = useThree((s) => s.camera);
+  const controls = useThree((s) => s.controls);
+  if (import.meta.env.DEV) Object.assign(window, { __camera: camera, __controls: controls });
   const tools = useMemo(() => ({ ray: new Raycaster(), ground: new Plane(new Vector3(0, 1, 0), 0), hit: new Vector3(), ndc: new Vector2(), t: 0 }), []);
   useFrame((_, dt) => {
     tools.t += dt;

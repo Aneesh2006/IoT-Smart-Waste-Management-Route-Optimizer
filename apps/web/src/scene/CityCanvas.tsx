@@ -13,7 +13,9 @@ import { Greenery } from './Greenery.tsx';
 import { CameraProbe } from './cameraProbe.tsx';
 import { Hazards } from './Hazards.tsx';
 import { Heatmap } from './Heatmap.tsx';
+import { NightSky } from './NightSky.tsx';
 import { PhoneBins } from './PhoneBins.tsx';
+import { PickupFx } from './PickupFx.tsx';
 import { Weather } from './Weather.tsx';
 import { LabelProjector } from './Labels.tsx';
 import { Ground } from './Ground.tsx';
@@ -116,6 +118,8 @@ function World() {
       <Hazards city={city} />
       <PhoneBins />
       <Weather city={city} />
+      <PickupFx />
+      <NightSky />
       <Trucks />
     </group>
   );

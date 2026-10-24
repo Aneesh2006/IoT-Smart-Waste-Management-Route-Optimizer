@@ -249,6 +249,9 @@ export class Simulation {
   metrics: Metrics = emptyMetrics();
   snapshots: Snapshot[] = [];
   tape: TapeFrame[] = [];
+  /** The latest bin pickups, newest last, for collection effects. */
+  pickups: { id: number; binId: number; truckId: number; litres: number; time: number; wasted: boolean }[] = [];
+  private pickupId = 0;
   events: SimEvent[] = [];
   lastPlan: ShiftPlan | null = null;
   /** Bumped whenever routes change, so renderers know to rebuild ribbons. */
@@ -730,6 +733,8 @@ export class Simulation {
       const site = this.city.bins[stop.binId];
       const litres = Math.min(b.fill * site.capacityL, t.capacity - t.load);
       if (b.fill < COSTS.wastedBelow) this.metrics.wastedVisits++;
+      this.pickups.push({ id: this.pickupId++, binId: b.id, truckId: t.id, litres, time: this.time, wasted: b.fill < COSTS.wastedBelow });
+      if (this.pickups.length > 40) this.pickups.shift();
       this.metrics.visits++;
       this.metrics.collectedL += litres;
       this.metrics.collectedByDistrict[site.district] = (this.metrics.collectedByDistrict[site.district] ?? 0) + litres;
