@@ -31,6 +31,7 @@ interface AppState {
   editorOpen: boolean;
   xrayOpen: boolean;
   impactOpen: boolean;
+  impactTab: 'flow' | 'fleet' | 'plan';
   reportOpen: boolean;
   paletteOpen: boolean;
   /** Presentation: slow camera orbit, panels hidden, scene index. */
@@ -158,6 +159,7 @@ export const useApp = create<AppState>((set, get) => ({
   editorOpen: false,
   xrayOpen: false,
   impactOpen: false,
+  impactTab: 'flow',
   reportOpen: false,
   paletteOpen: false,
   orbit: false,

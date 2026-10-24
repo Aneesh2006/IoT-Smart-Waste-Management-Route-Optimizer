@@ -98,6 +98,7 @@ export const SCENES: Scene[] = [
     title: 'Most trucks sit idle',
     subtitle: 'A day of the fleet: under a smart policy most trucks never leave the depot',
     enter() {
+      useApp.setState({ impactTab: 'fleet' });
       S().setImpactOpen(true);
     },
   },

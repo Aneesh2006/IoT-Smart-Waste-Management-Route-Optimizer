@@ -1,6 +1,5 @@
 import { PROCESSING, type DistrictKind, type Metrics, type Simulation } from '@binsight/core';
 import { Leaf, X } from 'lucide-react';
-import { useState } from 'react';
 import { DISTRICT_COLORS, DISTRICT_LABEL, STREAM_COLORS } from '../lib/colors.ts';
 import { fmtInt } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
@@ -133,7 +132,8 @@ export function ImpactPanel() {
 }
 
 function Impact({ sim }: { sim: Simulation }) {
-  const [tab, setTab] = useState<'flow' | 'fleet' | 'plan'>('flow');
+  const tab = useApp((s) => s.impactTab);
+  const setTab = (impactTab: 'flow' | 'fleet' | 'plan') => useApp.setState({ impactTab });
   const m = sim.metrics;
   const f = flows(m);
   const tonnes = (l: number) => (l * PROCESSING.densityKgPerL) / 1000;
