@@ -36,6 +36,7 @@ interface AppState {
   clean: boolean;
   present: number | null;
   quality: 'high' | 'low';
+  sound: boolean;
   heatmap: HeatMode;
   /** Time-lapse of the recorded tape; the scene draws the tape frame instead of the live sim. */
   replay: { index: number; playing: boolean } | null;
@@ -71,6 +72,7 @@ interface AppState {
   setXrayOpen(open: boolean): void;
   setImpactOpen(open: boolean): void;
   closeOverlays(): void;
+  toggleSound(): void;
   setQuality(q: 'high' | 'low', auto?: boolean): void;
   cycleHeatmap(): void;
   startReplay(): void;
@@ -154,6 +156,7 @@ export const useApp = create<AppState>((set, get) => ({
   orbit: false,
   clean: false,
   present: null,
+  sound: false,
   quality: (() => {
     try {
       return window.localStorage.getItem('binsight.quality') === 'low' ? 'low' : 'high';
@@ -259,6 +262,11 @@ export const useApp = create<AppState>((set, get) => ({
     }
     set({ quality });
     if (auto) get().showToast('Switched to performance mode for a smoother frame rate (gauge button to undo).');
+  },
+  toggleSound: () => {
+    const on = !get().sound;
+    if (on) void import('../lib/sound.ts').then((m) => m.enableAudio());
+    set({ sound: on });
   },
   closeOverlays: () => set({ compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false, xrayOpen: false, impactOpen: false }),
   setImpactOpen: (open) => set({ impactOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false, xrayOpen: false }),

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AudioCues } from './hud/AudioCues.tsx';
 import { BottomBar } from './hud/BottomBar.tsx';
 import { ComparePanel } from './hud/ComparePanel.tsx';
 import { GuideModal } from './hud/GuideModal.tsx';
@@ -98,6 +99,7 @@ export function App() {
       <ImpactPanel />
       <Toast />
       <Presenter />
+      <AudioCues />
     </div>
   );
 }
