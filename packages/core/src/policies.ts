@@ -1,7 +1,7 @@
 import type { BinState } from './sim.ts';
 import type { BinSite } from './types.ts';
 
-export type PolicyId = 'fixed' | 'threshold' | 'predictive' | 'dynamic';
+export type PolicyId = 'fixed' | 'threshold' | 'predictive' | 'dynamic' | 'custom';
 
 export interface PolicyContext {
   time: number;
@@ -86,6 +86,57 @@ export const POLICIES: Record<PolicyId, Policy> = {
       return forecastSelect(ctx, ctx.time + 3 * 3600, 0.97);
     },
   },
+  custom: {
+    id: 'custom',
+    name: 'Custom',
+    short: 'Custom',
+    description: 'Your own select(ctx) function, written in the policy editor.',
+    select: () => [],
+  },
 };
 
 export const POLICY_ORDER: PolicyId[] = ['fixed', 'threshold', 'predictive', 'dynamic'];
+
+let customCode: string | null = null;
+
+/** The built-in policies, plus Custom once one has been installed. */
+export function policyOrder(): PolicyId[] {
+  return customCode ? [...POLICY_ORDER, 'custom'] : POLICY_ORDER;
+}
+
+export function customPolicyCode() {
+  return customCode;
+}
+
+/**
+ * Compile user code into the Custom policy. The code is the body of a function
+ * `(ctx) => number[]`. It runs in this page like anything typed into the
+ * devtools console, so only paste code you trust.
+ */
+export function installCustomPolicy(code: string | null): { ok: true } | { ok: false; error: string } {
+  if (code === null) {
+    customCode = null;
+    POLICIES.custom.select = () => [];
+    return { ok: true };
+  }
+  let fn: (ctx: PolicyContext) => unknown;
+  try {
+    fn = new Function('ctx', `"use strict";\n${code}`) as (ctx: PolicyContext) => unknown;
+  } catch (e) {
+    return { ok: false, error: `Syntax error: ${(e as Error).message}` };
+  }
+  POLICIES.custom.select = (ctx) => {
+    const out = fn(ctx);
+    if (!Array.isArray(out)) throw new Error(`select(ctx) must return an array of bin ids, got ${typeof out}`);
+    const valid = new Set(ctx.bins.map((b) => b.id));
+    const ids = new Set<number>();
+    for (const v of out) {
+      if (!Number.isInteger(v)) throw new Error(`Bin ids must be integers, got ${JSON.stringify(v)}`);
+      // Bins already on a truck are not in ctx.bins; quietly skip them rather than fail.
+      if (valid.has(v)) ids.add(v);
+    }
+    return [...ids];
+  };
+  customCode = code;
+  return { ok: true };
+}

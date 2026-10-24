@@ -169,3 +169,17 @@ describe('algorithm lab', () => {
     }
   });
 });
+
+describe('custom policy', () => {
+  it('rejects syntax errors and bad return values, accepts a working policy', async () => {
+    const { validateCustomPolicy, installCustomPolicy, policyOrder } = await import('../src/index.ts');
+    expect(validateCustomPolicy('return ctx.bins.map(b => b.id').ok).toBe(false);
+    expect(validateCustomPolicy('return 42;').ok).toBe(false);
+    const good = validateCustomPolicy('return ctx.bins.filter(b => b.reading > 0.8).map(b => b.id);');
+    expect(good.ok).toBe(true);
+    expect(good.custom!.metrics.visits).toBeGreaterThan(0);
+    expect(policyOrder()).toContain('custom');
+    installCustomPolicy(null);
+    expect(policyOrder()).not.toContain('custom');
+  });
+});

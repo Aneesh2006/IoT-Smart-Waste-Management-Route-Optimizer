@@ -70,4 +70,5 @@ export const POLICY_COLORS: Record<PolicyId, string> = {
   threshold: '#fbbf24',
   predictive: '#5eead4',
   dynamic: '#a78bfa',
+  custom: '#f472b6',
 };

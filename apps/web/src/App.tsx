@@ -5,6 +5,7 @@ import { GuideModal } from './hud/GuideModal.tsx';
 import { Inspector } from './hud/Inspector.tsx';
 import { LabPanel } from './hud/LabPanel.tsx';
 import { OpsPanel } from './hud/OpsPanel.tsx';
+import { PolicyEditor } from './hud/PolicyEditor.tsx';
 import { SceneLabels } from './hud/SceneLabels.tsx';
 import { TopBar } from './hud/TopBar.tsx';
 import { CityCanvas } from './scene/CityCanvas.tsx';
@@ -22,6 +23,7 @@ function useHotkeys() {
         if (s.compareOpen) return s.setCompareOpen(false);
         if (s.labOpen) return s.setLabOpen(false);
         if (s.guideOpen) return s.setGuideOpen(false);
+        if (s.editorOpen) return s.setEditorOpen(false);
         s.selectBin(null);
         s.selectTruck(null);
       } else if (e.key === 'c') {
@@ -71,6 +73,7 @@ export function App() {
       <ComparePanel />
       <LabPanel />
       <GuideModal />
+      <PolicyEditor />
       <Toast />
     </div>
   );

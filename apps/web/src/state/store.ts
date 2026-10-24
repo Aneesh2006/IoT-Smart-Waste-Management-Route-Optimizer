@@ -25,6 +25,7 @@ interface AppState {
   compareScenario: ChaosKind | 'none';
   labOpen: boolean;
   guideOpen: boolean;
+  editorOpen: boolean;
   toast: string | null;
 
   bump(): void;
@@ -46,6 +47,7 @@ interface AppState {
   setCompareScenario(s: ChaosKind | 'none'): void;
   setLabOpen(open: boolean): void;
   setGuideOpen(open: boolean): void;
+  setEditorOpen(open: boolean): void;
   showToast(text: string): void;
   /** Copy a link that rebuilds this exact setup (not how far the run has got). */
   copyShareLink(): Promise<void>;
@@ -117,6 +119,7 @@ export const useApp = create<AppState>((set, get) => ({
   compareScenario: 'none',
   labOpen: false,
   guideOpen: !guideSeen(),
+  editorOpen: false,
   toast: null,
 
   bump: () => set((s) => ({ tick: s.tick + 1 })),
@@ -188,6 +191,7 @@ export const useApp = create<AppState>((set, get) => ({
     }
     set({ guideOpen: open, compareOpen: false, labOpen: false });
   },
+  setEditorOpen: (open) => set({ editorOpen: open, compareOpen: false, labOpen: false, guideOpen: false }),
   showToast: (text) => {
     clearTimeout(toastTimer);
     set({ toast: text });

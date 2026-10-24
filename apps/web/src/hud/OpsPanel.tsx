@@ -1,5 +1,5 @@
-import { CHAOS_INFO, CHAOS_ORDER, COSTS, POLICIES, POLICY_ORDER, type ChaosKind, type Construction } from '@binsight/core';
-import { CloudRain, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
+import { CHAOS_INFO, CHAOS_ORDER, COSTS, POLICIES, policyOrder, type ChaosKind, type Construction } from '@binsight/core';
+import { Code2, CloudRain, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
 import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
@@ -87,9 +87,16 @@ export function OpsPanel() {
         </div>
       </Section>
 
-      <Section title="Collection policy" right={<span className="font-mono text-[10px] text-slate-500">next shift</span>}>
+      <Section
+        title="Collection policy"
+        right={
+          <button onClick={() => useApp.getState().setEditorOpen(true)} className="flex items-center gap-1 text-[11px] text-neon hover:underline" title="Write your own policy">
+            <Code2 size={12} /> Write your own
+          </button>
+        }
+      >
         <div className="space-y-1.5">
-          {POLICY_ORDER.map((id) => {
+          {policyOrder().map((id) => {
             const p = POLICIES[id];
             const active = cfg.policy === id;
             return (

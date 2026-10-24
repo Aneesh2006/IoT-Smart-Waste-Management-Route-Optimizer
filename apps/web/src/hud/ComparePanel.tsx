@@ -1,4 +1,4 @@
-import { CHAOS_INFO, CHAOS_ORDER, POLICIES, POLICY_ORDER, WEEKDAYS, type ChaosEvent, type ChaosKind, type CompareRow, type Metrics, type PolicyId } from '@binsight/core';
+import { CHAOS_INFO, CHAOS_ORDER, POLICIES, WEEKDAYS, customPolicyCode, policyOrder, type ChaosEvent, type ChaosKind, type CompareRow, type Metrics, type PolicyId } from '@binsight/core';
 import { Loader2, Scale, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { POLICY_COLORS } from '../lib/colors.ts';
@@ -52,7 +52,7 @@ export function ComparePanel() {
         setRows((r) => [...r, row]);
       } else setRunning(false);
     };
-    worker.postMessage({ config: { ...structuredClone(sim.config), events: scenarioEvents(scenario) }, days });
+    worker.postMessage({ config: { ...structuredClone(sim.config), events: scenarioEvents(scenario) }, days, customCode: customPolicyCode() });
     return () => worker.terminate();
   }, [open, days, sim, scenario]);
 
@@ -117,7 +117,7 @@ export function ComparePanel() {
                 </tr>
               </thead>
               <tbody>
-                {POLICY_ORDER.map((id) => {
+                {policyOrder().map((id) => {
                   const row = rows.find((r) => r.policy === id);
                   return (
                     <tr key={id} className="border-t border-white/5">
@@ -131,7 +131,7 @@ export function ComparePanel() {
                         if (!row) return <td key={c.key} className="py-2.5 text-right text-slate-600">…</td>;
                         const v = c.value(row.metrics);
                         const values = rows.map((r) => c.value(r.metrics));
-                        const best = rows.length === POLICY_ORDER.length && v === Math.min(...values);
+                        const best = rows.length === policyOrder().length && v === Math.min(...values);
                         const base = fixed ? c.value(fixed.metrics) : null;
                         const delta = base && id !== 'fixed' && base !== 0 ? (v - base) / base : null;
                         return (
@@ -153,7 +153,7 @@ export function ComparePanel() {
             </table>
             {running && (
               <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
-                <Loader2 size={13} className="animate-spin" /> Simulating {rows.length + 1} of {POLICY_ORDER.length}…
+                <Loader2 size={13} className="animate-spin" /> Simulating {rows.length + 1} of {policyOrder().length}…
               </div>
             )}
           </div>
@@ -223,7 +223,7 @@ function LineChart({
 }) {
   const W = width;
   const H = 170;
-  const pad = { l: 34, r: 8, t: 6, b: 18 };
+  const pad = { l: unit ? 52 : 34, r: 8, t: 6, b: 18 };
   const n = days * 24;
   const all = rows.flatMap(pick);
   const max = Math.max(1, ...all);
