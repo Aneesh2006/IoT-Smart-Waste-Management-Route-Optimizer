@@ -90,7 +90,7 @@ export function solveVrp(problem: VrpProblem, options: VrpOptions = {}): VrpSolu
     });
   }
 
-  const trucks = assignTrips(trips, problem, HUB, DEPOT, d);
+  const trucks = assignTrips(trips, problem, HUB, DEPOT, d, improve);
   const totalLength = trucks.reduce((s, t) => s + t.length, 0);
   return {
     trucks,
@@ -179,6 +179,7 @@ function assignTrips(
   HUB: number,
   DEPOT: number,
   d: (a: number, b: number) => number,
+  improve: boolean,
 ): TruckPlan[] {
   const tripSeconds = (t: Trip) =>
     pathLength(t.stops, HUB, HUB, d) / problem.avgSpeed + t.stops.length * problem.serviceSeconds + problem.unloadSeconds;
@@ -217,6 +218,12 @@ function assignTrips(
     const ordered = [bucket[lead], ...bucket.filter((_, k) => k !== lead)].map((t, k) =>
       k === 0 && flip ? { ...t, stops: [...t.stops].reverse() } : t,
     );
+    // The first trip really starts at the depot, not the hub it was polished around.
+    if (improve && ordered[0].stops.length > 2) {
+      let s = twoOpt(ordered[0].stops, DEPOT, HUB, d);
+      s = orOpt(s, DEPOT, HUB, d);
+      ordered[0] = { ...ordered[0], stops: s };
+    }
     let length = 0;
     let stopCount = 0;
     ordered.forEach((t, k) => {

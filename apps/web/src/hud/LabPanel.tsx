@@ -15,13 +15,14 @@ import {
 import { FlaskConical, Pause, Play, RotateCcw, Shuffle, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../state/store.ts';
+import { FleetSolver } from './FleetSolver.tsx';
 import { Sparkline } from './Sparkline.tsx';
 import { IconButton, Panel, Segmented } from './ui.tsx';
 
 const ORDER: LabAlgorithm[] = ['nearest', 'savings', 'twoopt', 'oropt', 'anneal', 'ants', 'exact'];
 const ROUTE_COLORS = ['#5eead4', '#f472b6', '#facc15', '#a78bfa', '#fb923c', '#4ade80', '#60a5fa', '#f87171'];
 
-type Tab = 'tours' | 'paths';
+type Tab = 'tours' | 'paths' | 'fleet';
 
 interface Wave {
   order: number[];
@@ -143,6 +144,7 @@ function Lab() {
                 options={[
                   { value: 'tours', label: 'Tour building' },
                   { value: 'paths', label: 'Shortest paths' },
+                  { value: 'fleet', label: 'Fleet plans' },
                 ]}
               />
               <label className="flex items-center gap-2 rounded-lg bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-300 ring-1 ring-white/10">
@@ -159,6 +161,11 @@ function Lab() {
             </div>
           </div>
 
+          {tab === 'fleet' ? (
+            <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
+              <FleetSolver sim={sim} />
+            </div>
+          ) : (
           <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_380px]">
             <div className="relative min-h-[360px] border-b border-white/5 lg:border-b-0 lg:border-r">
               <LabMap city={sim.city} sim={sim} problem={problem} frame={current} tab={tab} wave={wave} waveCount={frame} />
@@ -210,6 +217,7 @@ function Lab() {
               )}
             </div>
           </div>
+          )}
         </div>
       </Panel>
     </div>
