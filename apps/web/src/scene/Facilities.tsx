@@ -1,20 +1,4 @@
-import type { City, Facility } from '@binsight/core';
-import { Html } from '@react-three/drei';
-import { Factory, Recycle, Warehouse } from 'lucide-react';
-
-function Label({ facility, icon, accent }: { facility: Facility; icon: React.ReactNode; accent: string }) {
-  return (
-    <Html position={[facility.x, 46, facility.z]} center zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
-      <div
-        className="glass flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium text-slate-100"
-        style={{ borderColor: `${accent}55` }}
-      >
-        <span style={{ color: accent }}>{icon}</span>
-        {facility.name}
-      </div>
-    </Html>
-  );
-}
+import type { City } from '@binsight/core';
 
 export function Facilities({ city }: { city: City }) {
   const { depot, landfill, recycling } = city;
@@ -37,7 +21,6 @@ export function Facilities({ city }: { city: City }) {
           </mesh>
         ))}
       </group>
-      <Label facility={depot} icon={<Warehouse size={13} />} accent="#22d3ee" />
 
       {/* Transfer station: a tipping hall beside a capped mound. */}
       <group position={[landfill.x + 40, 0, landfill.z]}>
@@ -54,7 +37,6 @@ export function Facilities({ city }: { city: City }) {
           <meshStandardMaterial color="#a16207" roughness={0.6} />
         </mesh>
       </group>
-      <Label facility={landfill} icon={<Factory size={13} />} accent="#f59e0b" />
 
       {/* Recycling centre: sorting shed with a green roof. */}
       <group position={[recycling.x, 0, recycling.z + 30]}>
@@ -67,7 +49,6 @@ export function Facilities({ city }: { city: City }) {
           <meshStandardMaterial color="#16a34a" roughness={0.6} />
         </mesh>
       </group>
-      <Label facility={recycling} icon={<Recycle size={13} />} accent="#4ade80" />
     </group>
   );
 }

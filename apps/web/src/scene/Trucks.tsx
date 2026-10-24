@@ -1,5 +1,5 @@
 import type { TruckState } from '@binsight/core';
-import { Html, Line } from '@react-three/drei';
+import { Line } from '@react-three/drei';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import { Color, MeshBasicMaterial, type Group } from 'three';
@@ -74,28 +74,7 @@ function TruckBody({ truck, color }: { truck: TruckState; color: string }) {
           )),
         )}
       </group>
-      <TruckChip truck={truck} color={color} />
     </group>
-  );
-}
-
-function TruckChip({ truck, color }: { truck: TruckState; color: string }) {
-  useApp((s) => s.tick);
-  const selected = useApp((s) => s.selectedTruck === truck.id);
-  const load = truck.load / truck.capacity;
-  return (
-    <Html position={[0, 16, 0]} center zIndexRange={[25, 0]} style={{ pointerEvents: 'none' }}>
-      <div
-        className={`glass flex items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-0.5 font-mono text-[10px] ${selected ? 'ring-1 ring-neon' : ''}`}
-      >
-        <span className="size-1.5 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }} />
-        T{truck.id + 1}
-        {truck.status === 'broken' && <span className="text-amber">⚠</span>}
-        <span className="h-1 w-8 overflow-hidden rounded-full bg-white/10">
-          <span className="block h-full rounded-full" style={{ width: `${Math.min(100, load * 100)}%`, background: color }} />
-        </span>
-      </div>
-    </Html>
   );
 }
 

@@ -1,5 +1,4 @@
 import type { City } from '@binsight/core';
-import { Html } from '@react-three/drei';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import {
@@ -14,8 +13,7 @@ import {
   type InstancedMesh,
   type Mesh,
 } from 'three';
-import { DISTRICT_LABEL, STREAM_COLORS, fillColor, fillCss } from '../lib/colors.ts';
-import { fmtPct } from '../lib/format.ts';
+import { STREAM_COLORS, fillColor } from '../lib/colors.ts';
 import { useApp } from '../state/store.ts';
 
 /** Bins are drawn larger than life so a 1 m bin reads at city scale. */
@@ -158,31 +156,7 @@ export function Bins({ city }: { city: City }) {
       <mesh ref={ring} geometry={geo.ring} visible={false}>
         <meshBasicMaterial color="#5eead4" toneMapped={false} side={DoubleSide} />
       </mesh>
-      <HoverTip city={city} />
     </group>
   );
 }
 
-function HoverTip({ city }: { city: City }) {
-  const hovered = useApp((s) => s.hoveredBin);
-  useApp((s) => s.tick);
-  const sim = useApp((s) => s.sim);
-  if (hovered === null) return null;
-  const site = city.bins[hovered];
-  const st = sim.bins[hovered];
-  return (
-    <Html position={[site.x, BASE_Y + BIN_HEIGHT + 10, site.z]} center zIndexRange={[30, 0]} style={{ pointerEvents: 'none' }}>
-      <div className="glass min-w-36 rounded-lg px-2.5 py-1.5 text-[11px] leading-tight">
-        <div className="flex items-center justify-between gap-3">
-          <span className="font-mono font-semibold text-slate-100">{site.label}</span>
-          <span className="font-mono font-semibold" style={{ color: fillCss(st.reading) }}>
-            {fmtPct(st.reading)}
-          </span>
-        </div>
-        <div className="mt-0.5 text-slate-400">
-          {DISTRICT_LABEL[site.district]} · {site.stream === 'wet' ? 'Wet' : 'Dry'} · {site.capacityL} L
-        </div>
-      </div>
-    </Html>
-  );
-}

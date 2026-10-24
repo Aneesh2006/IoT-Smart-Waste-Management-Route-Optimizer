@@ -1,5 +1,5 @@
 import { DAY, HOUR, clockParts } from '@binsight/core';
-import { Cloud, Dices, FastForward, Layers, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
+import { CircleHelp, Cloud, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
 import { SPEEDS, useApp } from '../state/store.ts';
 import { IconButton, Panel, Segmented } from './ui.tsx';
 
@@ -28,7 +28,7 @@ export function TopBar() {
   const paused = useApp((s) => s.paused);
   const leftOpen = useApp((s) => s.leftOpen);
   const dataView = useApp((s) => s.dataView);
-  const { setSpeed, togglePause, skipToNextShift, newCity, setLeftOpen, toggleDataView } = useApp.getState();
+  const { setSpeed, togglePause, skipToNextShift, newCity, setLeftOpen, toggleDataView, setGuideOpen, copyShareLink } = useApp.getState();
 
   const c = clockParts(sim.time);
   const shift = sim.shiftAt();
@@ -104,6 +104,12 @@ export function TopBar() {
         </div>
         <IconButton onClick={() => newCity()} title="Generate a new city">
           <Dices size={16} />
+        </IconButton>
+        <IconButton onClick={() => void copyShareLink()} title="Copy a shareable link to this setup">
+          <Link2 size={16} />
+        </IconButton>
+        <IconButton onClick={() => setGuideOpen(true)} title="Guide (?)">
+          <CircleHelp size={16} />
         </IconButton>
       </Panel>
     </div>

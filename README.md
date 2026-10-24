@@ -22,7 +22,23 @@ pnpm test       # core unit tests
 pnpm sim        # one seeded week under every policy, as a table
 ```
 
-Add `?seed=anything` to the URL to build a different (but reproducible) city.
+Add `?seed=anything` to the URL to build a different (but reproducible) city. The
+link button in the top bar copies a URL carrying the seed, policy, solver, fleet
+size and speed.
+
+## What's in it
+
+- **Mission control**: a procedural 3D city with day/night, smart bins as glowing
+  pillars, trucks driving their planned routes, and a data view (`V`).
+- **Policies**: Fixed schedule, Threshold, Predictive (learns each bin's daily
+  rhythm) and Dynamic (hourly re-plans).
+- **Compare** (`C`): every policy over the same seeded week, optionally with a
+  disruption on Wednesday.
+- **Algorithm lab** (`L`): nearest neighbour, Clarke–Wright, 2-opt, Or-opt,
+  simulated annealing and ant colony, scored against the exact Held–Karp optimum;
+  plus Dijkstra's wavefront vs A*.
+- **Chaos lab**: festival spike, monsoon flooding, truck breakdown, dead sensors,
+  bin fire.
 
 ## Keys
 
@@ -32,4 +48,7 @@ Add `?seed=anything` to the URL to build a different (but reproducible) city.
 | 1–5 | simulation speed |
 | N | skip to the next shift |
 | V | data view (ghost the buildings) |
-| Esc | clear selection |
+| C | compare policies |
+| L | algorithm lab |
+| ? | guide |
+| Esc | close / clear selection |

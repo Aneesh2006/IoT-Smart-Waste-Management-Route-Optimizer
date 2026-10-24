@@ -11,6 +11,7 @@ import { Buildings } from './Buildings.tsx';
 import { Facilities } from './Facilities.tsx';
 import { Greenery } from './Greenery.tsx';
 import { Hazards } from './Hazards.tsx';
+import { LabelProjector } from './Labels.tsx';
 import { Ground } from './Ground.tsx';
 import { Roads } from './Roads.tsx';
 import { Trucks } from './Trucks.tsx';
@@ -106,6 +107,7 @@ export function CityCanvas() {
         <World />
         <SimDriver />
         <CameraRig />
+        <LabelProjector />
         <MapControls
           makeDefault
           target={[cx, 0, cz]}
