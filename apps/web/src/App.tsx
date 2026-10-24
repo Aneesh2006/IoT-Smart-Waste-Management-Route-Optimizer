@@ -8,6 +8,7 @@ import { OpsPanel } from './hud/OpsPanel.tsx';
 import { PolicyEditor } from './hud/PolicyEditor.tsx';
 import { SceneLabels } from './hud/SceneLabels.tsx';
 import { TopBar } from './hud/TopBar.tsx';
+import { XRay } from './hud/XRay.tsx';
 import { CityCanvas } from './scene/CityCanvas.tsx';
 import { SPEEDS, useApp } from './state/store.ts';
 
@@ -24,12 +25,15 @@ function useHotkeys() {
         if (s.labOpen) return s.setLabOpen(false);
         if (s.guideOpen) return s.setGuideOpen(false);
         if (s.editorOpen) return s.setEditorOpen(false);
+        if (s.xrayOpen) return s.setXrayOpen(false);
         s.selectBin(null);
         s.selectTruck(null);
       } else if (e.key === 'c') {
         s.setCompareOpen(!s.compareOpen);
       } else if (e.key === 'l') {
         s.setLabOpen(!s.labOpen);
+      } else if (e.key === 'x') {
+        s.setXrayOpen(!s.xrayOpen);
       } else if (e.key === '?' || e.key === 'h') {
         s.setGuideOpen(!s.guideOpen);
       } else if (/^[1-5]$/.test(e.key)) {
@@ -74,6 +78,7 @@ export function App() {
       <LabPanel />
       <GuideModal />
       <PolicyEditor />
+      <XRay />
       <Toast />
     </div>
   );

@@ -1,5 +1,5 @@
 import { DAY, HOUR, clockParts } from '@binsight/core';
-import { CircleHelp, Cloud, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
+import { CircleHelp, Cloud, Radar, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
 import { SPEEDS, useApp } from '../state/store.ts';
 import { IconButton, Panel, Segmented } from './ui.tsx';
 
@@ -87,6 +87,9 @@ export function TopBar() {
         )}
         <IconButton onClick={toggleDataView} title="Data view: ghost the buildings (V)" active={dataView}>
           <Layers size={16} />
+        </IconButton>
+        <IconButton onClick={() => useApp.getState().setXrayOpen(true)} title="Cloud X-Ray: watch readings travel through AWS (X)">
+          <Radar size={16} />
         </IconButton>
       </Panel>
 

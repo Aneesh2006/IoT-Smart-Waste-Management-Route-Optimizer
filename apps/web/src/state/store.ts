@@ -26,6 +26,7 @@ interface AppState {
   labOpen: boolean;
   guideOpen: boolean;
   editorOpen: boolean;
+  xrayOpen: boolean;
   toast: string | null;
   mode: 'sandbox' | 'live';
   liveStatus: 'off' | 'connecting' | 'live' | 'error';
@@ -55,6 +56,7 @@ interface AppState {
   setLabOpen(open: boolean): void;
   setGuideOpen(open: boolean): void;
   setEditorOpen(open: boolean): void;
+  setXrayOpen(open: boolean): void;
   showToast(text: string): void;
   /** Copy a link that rebuilds this exact setup (not how far the run has got). */
   copyShareLink(): Promise<void>;
@@ -128,6 +130,7 @@ export const useApp = create<AppState>((set, get) => ({
   labOpen: false,
   guideOpen: !guideSeen(),
   editorOpen: false,
+  xrayOpen: false,
   toast: null,
   mode: 'sandbox',
   liveStatus: 'off',
@@ -207,6 +210,7 @@ export const useApp = create<AppState>((set, get) => ({
     }
     set({ guideOpen: open, compareOpen: false, labOpen: false });
   },
+  setXrayOpen: (open) => set({ xrayOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false }),
   setEditorOpen: (open) => set({ editorOpen: open, compareOpen: false, labOpen: false, guideOpen: false }),
   showToast: (text) => {
     clearTimeout(toastTimer);

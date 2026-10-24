@@ -19,6 +19,7 @@ import {
   type Telemetry,
   type TruckFrame,
 } from '@binsight/core';
+import { emitPacket } from './xrayFeed.ts';
 
 export interface PhoneBin {
   id: string;
@@ -130,8 +131,14 @@ export class LiveWorld extends Simulation {
       if (b.kind === 'phone') this.upsertPhone(b, Date.now() + this.clockOffset);
       else if (!b.world || b.world === this.world) this.applyBin(b);
     }
-    this.hops.push({ ...update.hops, tBrowser: Date.now() + this.clockOffset, batch: update.batch });
+    const sample = { ...update.hops, tBrowser: Date.now() + this.clockOffset, batch: update.batch };
+    this.hops.push(sample);
     if (this.hops.length > 120) this.hops.shift();
+    const first = update.bins[0];
+    if (first) {
+      const label = first.kind === 'phone' ? `${first.emoji ?? ''} ${first.nick ?? 'phone'}`.trim() : (this.city.bins[Number(first.id)]?.label ?? `#${first.id}`);
+      emitPacket({ kind: first.kind, label: update.bins.length > 1 ? `${label} +${update.bins.length - 1}` : label, payload: update, hops: sample, simulated: false });
+    }
   }
 
   /** Returns false when the frame belongs to a different world (the caller rebuilds). */
