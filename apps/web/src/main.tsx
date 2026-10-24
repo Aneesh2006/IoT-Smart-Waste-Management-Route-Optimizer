@@ -1,11 +1,17 @@
 import '@fontsource-variable/jetbrains-mono';
 import '@fontsource-variable/space-grotesk';
 import { createRoot } from 'react-dom/client';
-import { App } from './App.tsx';
 import './index.css';
 
-// No StrictMode: its double-mounted effects make drei's <Html> roots unmount mid-render.
-createRoot(document.getElementById('root')!).render(<App />);
+const root = createRoot(document.getElementById('root')!);
+
+// /bin is the phone page: load it on its own so phones never download the 3D engine.
+// No StrictMode: its double-mounted effects would open two MQTT connections in development.
+if (window.location.pathname.startsWith('/bin')) {
+  void import('./phone/PhoneApp.tsx').then(({ PhoneApp }) => root.render(<PhoneApp />));
+} else {
+  void import('./App.tsx').then(({ App }) => root.render(<App />));
+}
 
 // Dev-only handles so the scene can be driven from devtools (or a hidden preview pane).
 if (import.meta.env.DEV) {

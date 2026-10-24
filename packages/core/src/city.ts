@@ -74,9 +74,10 @@ const DISTRICT_SPREAD: Record<DistrictKind, number> = {
 
 export function generateCity(options: CityOptions): City {
   const seed = options.seed;
-  const grid = options.grid ?? 13;
-  const spacing = options.block ?? 120;
   const binTarget = options.bins ?? 120;
+  // Room for every bin: each street segment holds at most one.
+  const grid = options.grid ?? Math.max(13, Math.ceil(Math.sqrt(binTarget * 0.75)));
+  const spacing = options.block ?? 120;
   const rng = createRng(seed);
   const rLayout = rng.fork('layout');
 

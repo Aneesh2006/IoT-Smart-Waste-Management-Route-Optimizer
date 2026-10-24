@@ -3,6 +3,7 @@ import { Factory, Recycle, Warehouse } from 'lucide-react';
 import { DISTRICT_LABEL, TRUCK_COLORS, fillCss } from '../lib/colors.ts';
 import { fmtPct } from '../lib/format.ts';
 import { BIN_HEIGHT } from '../scene/Bins.tsx';
+import { LiveWorld } from '../live/LiveWorld.ts';
 import { anchor } from '../scene/Labels.tsx';
 import { useApp } from '../state/store.ts';
 
@@ -43,6 +44,22 @@ export function SceneLabels() {
         );
       })}
       {hovered !== null && hovered < sim.bins.length && <HoverTip id={hovered} />}
+      {sim instanceof LiveWorld &&
+        [...sim.phones.values()].map((p) => (
+          <div
+            key={p.id}
+            ref={anchor(`phone-${p.id}`, () => [p.x, BIN_HEIGHT * 1.3 + 12, p.z])}
+            className={`glass absolute left-0 top-0 flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${p.dispatched ? 'ring-1 ring-fuchsia-400' : ''}`}
+            style={HIDDEN}
+          >
+            <span>{p.emoji}</span>
+            <span className="max-w-24 truncate text-slate-100">{p.nick}</span>
+            <span className="font-mono text-[10px]" style={{ color: fillCss(p.r) }}>
+              {Math.round(p.r * 100)}%
+            </span>
+            {p.dispatched && <span className="text-fuchsia-300">🚛</span>}
+          </div>
+        ))}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
 import { Sparkline } from './Sparkline.tsx';
+import { LivePanel } from './LivePanel.tsx';
 import { Bar, Panel, Section, Segmented, Stat } from './ui.tsx';
 
 const CHAOS_ICON: Record<ChaosKind, React.ReactNode> = {
@@ -34,6 +35,7 @@ export function OpsPanel() {
 
   return (
     <Panel className="scroll-thin pointer-events-auto max-h-full w-[330px] overflow-y-auto">
+      {useApp.getState().mode === 'live' && <LivePanel />}
       <Section title="City pulse" right={<span className="tabular font-mono text-[11px] text-slate-400">{total} bins</span>}>
         <div className="mb-2 flex h-2.5 overflow-hidden rounded-full ring-1 ring-white/10">
           {(Object.keys(bands) as FillBand[]).map((k) => (

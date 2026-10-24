@@ -1,0 +1,26 @@
+{
+  "name": "@binsight/services",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@binsight/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1156.0",
+    "@aws-sdk/client-dynamodb": "^3.1156.0",
+    "@aws-sdk/client-iot-data-plane": "^3.1156.0",
+    "@aws-sdk/client-lambda": "^3.1156.0",
+    "@aws-sdk/client-sns": "^3.1156.0",
+    "@aws-sdk/client-sqs": "^3.1156.0",
+    "@aws-sdk/lib-dynamodb": "^3.1156.0",
+    "@types/aws-lambda": "^8.10.164",
+    "@types/node": "^24.0.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

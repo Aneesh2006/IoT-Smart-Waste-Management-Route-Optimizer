@@ -10,3 +10,4 @@ cdk.out/
 .DS_Store
 Thumbs.db
 .claude/
+apps/web/public/live-config*.json

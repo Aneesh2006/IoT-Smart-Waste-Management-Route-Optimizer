@@ -183,3 +183,25 @@ describe('custom policy', () => {
     expect(policyOrder()).not.toContain('custom');
   });
 });
+
+describe('sigv4 presign for IoT websockets', () => {
+  it('produces exactly the AWS SDK signature', async () => {
+    const { presignIotWebsocket } = await import('../src/sigv4.ts');
+    const { SignatureV4 } = await import('@smithy/signature-v4');
+    const { Sha256 } = await import('@aws-crypto/sha256-js');
+    const creds = { accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY' };
+    const now = new Date('2026-10-25T10:15:00Z');
+    const endpoint = 'abc123-ats.iot.ap-south-1.amazonaws.com';
+    const ours = new URL((await presignIotWebsocket(endpoint, 'ap-south-1', { ...creds, sessionToken: 'TOKEN/+=' }, now, 3600)).replace('wss:', 'https:'));
+    const ref = await new SignatureV4({ credentials: creds, region: 'ap-south-1', service: 'iotdevicegateway', sha256: Sha256 }).presign(
+      { method: 'GET', protocol: 'https:', hostname: endpoint, path: '/mqtt', headers: { host: endpoint }, query: {} },
+      { signingDate: now, expiresIn: 3600 },
+    );
+    for (const k of ['X-Amz-Algorithm', 'X-Amz-Credential', 'X-Amz-Date', 'X-Amz-Expires', 'X-Amz-SignedHeaders', 'X-Amz-Signature']) {
+      expect(ours.searchParams.get(k), k).toBe(ref.query![k]);
+    }
+    // The session token rides along unsigned, after the signature.
+    expect(ours.searchParams.get('X-Amz-Security-Token')).toBe('TOKEN/+=');
+    expect(ours.search.indexOf('X-Amz-Security-Token')).toBeGreaterThan(ours.search.indexOf('X-Amz-Signature'));
+  });
+});

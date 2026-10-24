@@ -1,4 +1,4 @@
-import { POLICY_ORDER, Simulation, type ChaosKind, type Construction, type PolicyId, type SimConfig } from '@binsight/core';
+import { POLICY_ORDER, Simulation, type ChaosKind, type Construction, type LiveControl, type PolicyId, type SimConfig } from '@binsight/core';
 import { create } from 'zustand';
 
 export const SPEEDS = [10, 60, 300, 1200, 3600] as const;
@@ -27,6 +27,13 @@ interface AppState {
   guideOpen: boolean;
   editorOpen: boolean;
   toast: string | null;
+  mode: 'sandbox' | 'live';
+  liveStatus: 'off' | 'connecting' | 'live' | 'error';
+  liveError: string | null;
+  liveControl: LiveControl | null;
+  operator: boolean;
+  /** Sandbox city to come back to when leaving Live mode. */
+  sandboxConfig: Partial<SimConfig>;
 
   bump(): void;
   setSpeed(speed: number): void;
@@ -51,6 +58,7 @@ interface AppState {
   showToast(text: string): void;
   /** Copy a link that rebuilds this exact setup (not how far the run has got). */
   copyShareLink(): Promise<void>;
+  setMode(mode: 'sandbox' | 'live'): Promise<void>;
 }
 
 /** Everything a shared link carries. The run's progress is deliberately left out. */
@@ -121,6 +129,12 @@ export const useApp = create<AppState>((set, get) => ({
   guideOpen: !guideSeen(),
   editorOpen: false,
   toast: null,
+  mode: 'sandbox',
+  liveStatus: 'off',
+  liveError: null,
+  liveControl: null,
+  operator: false,
+  sandboxConfig: initial.config,
 
   bump: () => set((s) => ({ tick: s.tick + 1 })),
   setSpeed: (speed) => set({ speed, paused: false }),
@@ -142,6 +156,7 @@ export const useApp = create<AppState>((set, get) => ({
   setFollow: (id) => set({ followTruck: id }),
   clearFocus: () => set({ focus: null }),
   newCity: (seed) => {
+    if (get().mode === 'live') return get().showToast('In Live mode, reset the city from the Cloud panel (operators only).');
     const prev = get().sim.config;
     const next = seed ?? randomSeed();
     const url = new URL(window.location.href);
@@ -171,6 +186,7 @@ export const useApp = create<AppState>((set, get) => ({
     get().bump();
   },
   skipToNextShift: () => {
+    if (get().mode === 'live') return get().showToast('The cloud runs the clock in Live mode.');
     const sim = get().sim;
     const target = sim.nextShiftStart() + 1;
     sim.advance(target - sim.time);
@@ -196,6 +212,26 @@ export const useApp = create<AppState>((set, get) => ({
     clearTimeout(toastTimer);
     set({ toast: text });
     toastTimer = setTimeout(() => set({ toast: null }), 2600);
+  },
+  setMode: async (mode) => {
+    const s = get();
+    if (mode === s.mode && mode === 'sandbox') return;
+    const session = await import('../live/session.ts');
+    if (mode === 'live') {
+      set({ sandboxConfig: { ...s.sim.config, shifts: s.sim.config.shifts.map((x) => ({ ...x })) } });
+      await session.startLive().catch(() => undefined);
+      return;
+    }
+    session.stopLive();
+    set((st) => ({
+      mode: 'sandbox',
+      sim: new Simulation(st.sandboxConfig),
+      simKey: st.simKey + 1,
+      selectedBin: null,
+      selectedTruck: null,
+      followTruck: null,
+      hoveredBin: null,
+    }));
   },
   copyShareLink: async () => {
     const { sim, speed, showToast } = get();

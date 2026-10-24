@@ -28,7 +28,10 @@ export function TopBar() {
   const paused = useApp((s) => s.paused);
   const leftOpen = useApp((s) => s.leftOpen);
   const dataView = useApp((s) => s.dataView);
-  const { setSpeed, togglePause, skipToNextShift, newCity, setLeftOpen, toggleDataView, setGuideOpen, copyShareLink } = useApp.getState();
+  const mode = useApp((s) => s.mode);
+  const liveStatus = useApp((s) => s.liveStatus);
+  const liveControl = useApp((s) => s.liveControl);
+  const { setSpeed, togglePause, skipToNextShift, newCity, setLeftOpen, toggleDataView, setGuideOpen, copyShareLink, setMode } = useApp.getState();
 
   const c = clockParts(sim.time);
   const shift = sim.shiftAt();
@@ -61,18 +64,27 @@ export function TopBar() {
           <div className={`eyebrow !text-[9px] ${shift === -1 ? '' : '!text-neon'}`}>{shiftLabel}</div>
         </div>
         <div className="mx-1 h-8 w-px bg-white/10" />
-        <IconButton onClick={togglePause} title={paused ? 'Play (Space)' : 'Pause (Space)'} active={!paused}>
-          {paused ? <Play size={16} /> : <Pause size={16} />}
-        </IconButton>
-        <Segmented
-          size="sm"
-          value={speed}
-          onChange={setSpeed}
-          options={SPEEDS.map((s, i) => ({ value: s, label: speedLabel(s), title: `${s}× real time (key ${i + 1})` }))}
-        />
-        <IconButton onClick={skipToNextShift} title="Skip to the next shift (N)">
-          <FastForward size={16} />
-        </IconButton>
+        {mode === 'live' ? (
+          <div className="flex items-center gap-2 rounded-lg bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-slate-300 ring-1 ring-white/10" title="The cloud runs the clock in Live mode">
+            <Cloud size={13} className="text-neon" />
+            {liveControl?.running ? `${liveControl.speed}× · cloud clock` : 'fleet stopped'}
+          </div>
+        ) : (
+          <>
+            <IconButton onClick={togglePause} title={paused ? 'Play (Space)' : 'Pause (Space)'} active={!paused}>
+              {paused ? <Play size={16} /> : <Pause size={16} />}
+            </IconButton>
+            <Segmented
+              size="sm"
+              value={speed}
+              onChange={setSpeed}
+              options={SPEEDS.map((s, i) => ({ value: s, label: speedLabel(s), title: `${s}× real time (key ${i + 1})` }))}
+            />
+            <IconButton onClick={skipToNextShift} title="Skip to the next shift (N)">
+              <FastForward size={16} />
+            </IconButton>
+          </>
+        )}
         <IconButton onClick={toggleDataView} title="Data view: ghost the buildings (V)" active={dataView}>
           <Layers size={16} />
         </IconButton>
@@ -83,23 +95,26 @@ export function TopBar() {
       <Panel className="pointer-events-auto flex items-center gap-2 px-3 py-2">
         <Segmented
           size="sm"
-          value="sandbox"
-          onChange={() => {}}
+          value={mode}
+          onChange={(m) => void setMode(m)}
           options={[
-            { value: 'sandbox', label: 'Sandbox' },
+            { value: 'sandbox', label: 'Sandbox', title: 'Simulated in this browser: time-warp, deterministic, offline' },
             {
               value: 'live',
               label: (
                 <>
+                  <span
+                    className="size-1.5 rounded-full"
+                    style={{ background: liveStatus === 'live' ? '#34d399' : liveStatus === 'connecting' ? '#fbbf24' : liveStatus === 'error' ? '#f87171' : '#64748b' }}
+                  />
                   <Cloud size={12} /> Live
                 </>
               ),
-              disabled: true,
-              title: 'Live mode streams real devices through AWS IoT Core (coming in phase 2)',
+              title: 'Stream the city from AWS: IoT Core, SQS, Lambda, DynamoDB',
             },
           ]}
         />
-        <div className="hidden items-center gap-1.5 rounded-lg bg-white/[0.04] px-2 py-1 font-mono text-[11px] text-slate-300 ring-1 ring-white/10 sm:flex" title="City seed: the same seed rebuilds the same city">
+        <div className={`${mode === 'live' ? 'hidden' : 'hidden sm:flex'} items-center gap-1.5 rounded-lg bg-white/[0.04] px-2 py-1 font-mono text-[11px] text-slate-300 ring-1 ring-white/10`} title="City seed: the same seed rebuilds the same city">
           <span className="text-slate-500">seed</span> {sim.config.seed}
         </div>
         <IconButton onClick={() => newCity()} title="Generate a new city">

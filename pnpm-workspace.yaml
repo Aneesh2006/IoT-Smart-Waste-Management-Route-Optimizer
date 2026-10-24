@@ -1,3 +1,9 @@
 packages:
   - apps/*
   - packages/*
+  - services
+  - infra
+
+# esbuild bundles the Lambda functions; its install script fetches the native binary.
+allowBuilds:
+  esbuild: true

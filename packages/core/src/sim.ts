@@ -25,6 +25,8 @@ export interface SimConfig {
   startHour: number;
   /** Disruptions scheduled in advance (Compare uses this to replay a scenario under every policy). */
   events: ChaosEvent[];
+  /** Policy switches at sim times (Live mode replays these from scratch). */
+  policyChanges: { at: number; policy: PolicyId }[];
 }
 
 export type ChaosKind = 'festival' | 'flood' | 'breakdown' | 'sensors' | 'fire';
@@ -60,6 +62,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   improve: true,
   startHour: 5,
   events: [],
+  policyChanges: [],
 };
 
 /** Assumptions behind every rupee and kilogram on screen; keep them in one place. */
@@ -226,6 +229,7 @@ export class Simulation {
   private boosts: { district: DistrictKind; factor: number; until: number }[] = [];
   private sensorRepairs: { bins: number[]; at: number }[] = [];
   private pending: ChaosEvent[];
+  private pendingPolicies: { at: number; policy: PolicyId }[];
   private eventId = 0;
   private rFill: Rng;
   private rSensor: Rng;
@@ -243,6 +247,8 @@ export class Simulation {
     this.rChaos = rng.fork('chaos');
     this.config.events = this.config.events.map((e) => ({ ...e }));
     this.pending = [...this.config.events].sort((a, b) => a.at - b.at);
+    this.config.policyChanges = this.config.policyChanges.map((p) => ({ ...p }));
+    this.pendingPolicies = [...this.config.policyChanges].sort((a, b) => a.at - b.at);
     const rInit = rng.fork('init');
     this.time = this.config.startHour * HOUR;
 
@@ -385,6 +391,7 @@ export class Simulation {
       const b = a + h;
       if (a < start && b >= start) this.planShift(k);
     }
+    while (this.pendingPolicies.length && this.pendingPolicies[0].at <= t1) this.setPolicy(this.pendingPolicies.shift()!.policy);
     while (this.pending.length && this.pending[0].at <= t1) this.applyChaos(this.pending.shift()!.kind);
     if (Math.floor(t1 / 60) !== Math.floor(t0 / 60)) this.expireChaos();
     if (Math.floor(t1 / HOUR) !== Math.floor(t0 / HOUR)) {

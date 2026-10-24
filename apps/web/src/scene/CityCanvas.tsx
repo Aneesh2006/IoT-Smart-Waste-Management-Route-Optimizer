@@ -11,6 +11,7 @@ import { Buildings } from './Buildings.tsx';
 import { Facilities } from './Facilities.tsx';
 import { Greenery } from './Greenery.tsx';
 import { Hazards } from './Hazards.tsx';
+import { PhoneBins } from './PhoneBins.tsx';
 import { LabelProjector } from './Labels.tsx';
 import { Ground } from './Ground.tsx';
 import { Roads } from './Roads.tsx';
@@ -81,6 +82,7 @@ function World() {
       <Facilities city={city} />
       <Bins city={city} />
       <Hazards city={city} />
+      <PhoneBins />
       <Trucks />
     </group>
   );
