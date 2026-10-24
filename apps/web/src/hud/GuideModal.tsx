@@ -160,6 +160,9 @@ export function GuideModal() {
                 <K>P</K> present (→ / ← / Esc)
               </span>
               <span>
+                <K>/</K> or <K>Ctrl K</K> search anything
+              </span>
+              <span>
                 <K>?</K> this guide
               </span>
               <span>

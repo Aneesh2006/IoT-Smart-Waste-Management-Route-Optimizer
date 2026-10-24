@@ -32,6 +32,7 @@ interface AppState {
   xrayOpen: boolean;
   impactOpen: boolean;
   reportOpen: boolean;
+  paletteOpen: boolean;
   /** Presentation: slow camera orbit, panels hidden, scene index. */
   orbit: boolean;
   clean: boolean;
@@ -158,6 +159,7 @@ export const useApp = create<AppState>((set, get) => ({
   xrayOpen: false,
   impactOpen: false,
   reportOpen: false,
+  paletteOpen: false,
   orbit: false,
   clean: false,
   present: null,

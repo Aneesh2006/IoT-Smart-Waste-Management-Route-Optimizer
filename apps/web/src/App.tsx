@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AudioCues } from './hud/AudioCues.tsx';
 import { BottomBar } from './hud/BottomBar.tsx';
+import { CommandPalette } from './hud/CommandPalette.tsx';
 import { ComparePanel } from './hud/ComparePanel.tsx';
 import { GuideModal } from './hud/GuideModal.tsx';
 import { ImpactPanel } from './hud/ImpactPanel.tsx';
@@ -25,6 +26,12 @@ function useHotkeys() {
         if (e.key === 'Escape') s.setReportOpen(false);
         return;
       }
+      if ((e.key === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !s.paletteOpen)) {
+        e.preventDefault();
+        useApp.setState({ paletteOpen: !s.paletteOpen });
+        return;
+      }
+      if (s.paletteOpen) return;
       if (e.code === 'Space') {
         e.preventDefault();
         s.togglePause();
@@ -108,6 +115,7 @@ export function App() {
       <Toast />
       <Presenter />
       <AudioCues />
+      <CommandPalette />
     </div>
   );
 }
