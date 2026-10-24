@@ -58,6 +58,8 @@ interface AppState {
   setFollow(id: number | null): void;
   clearFocus(): void;
   newCity(seed?: string): void;
+  /** Rebuild the sandbox city with some settings changed (fleet size, bins, shifts…). */
+  rebuildCity(patch: Partial<SimConfig>): void;
   setPolicy(id: PolicyId): void;
   setThreshold(t: number): void;
   setSolver(construction: Construction, improve: boolean): void;
@@ -195,18 +197,23 @@ export const useApp = create<AppState>((set, get) => ({
   clearFocus: () => set({ focus: null }),
   newCity: (seed) => {
     if (get().mode === 'live') return get().showToast('In Live mode, reset the city from the Cloud panel (operators only).');
+    get().rebuildCity({ seed: seed ?? randomSeed() });
+  },
+  rebuildCity: (patch) => {
+    if (get().mode === 'live') return get().showToast('In Live mode, reset the city from the Cloud panel (operators only).');
     const prev = get().sim.config;
-    const next = seed ?? randomSeed();
+    const config = { ...prev, ...patch, events: [], policyChanges: [], shifts: (patch.shifts ?? prev.shifts).map((x) => ({ ...x })) };
     const url = new URL(window.location.href);
-    url.searchParams.set('seed', next);
+    url.searchParams.set('seed', config.seed);
     window.history.replaceState(null, '', url);
     set((s) => ({
-      sim: new Simulation({ ...prev, seed: next, shifts: prev.shifts.map((x) => ({ ...x })) }),
+      sim: new Simulation(config),
       simKey: s.simKey + 1,
       selectedBin: null,
       selectedTruck: null,
       followTruck: null,
       hoveredBin: null,
+      replay: null,
     }));
   },
   setPolicy: (id) => {
@@ -255,10 +262,13 @@ export const useApp = create<AppState>((set, get) => ({
   exitReplay: () => set({ replay: null, paused: false }),
   cycleHeatmap: () => set((s) => ({ heatmap: HEAT_MODES[(HEAT_MODES.indexOf(s.heatmap) + 1) % HEAT_MODES.length] })),
   setQuality: (quality, auto = false) => {
-    try {
-      window.localStorage.setItem('binsight.quality', quality);
-    } catch {
-      // not remembered; fine
+    // Only a deliberate choice is remembered; an automatic downgrade lasts for this visit.
+    if (!auto) {
+      try {
+        window.localStorage.setItem('binsight.quality', quality);
+      } catch {
+        // not remembered; fine
+      }
     }
     set({ quality });
     if (auto) get().showToast('Switched to performance mode for a smoother frame rate (gauge button to undo).');

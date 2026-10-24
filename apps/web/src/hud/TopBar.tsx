@@ -43,21 +43,21 @@ export function TopBar() {
   const shiftLabel = shift === -1 ? 'Between shifts' : shift === 0 ? 'Morning shift' : 'Evening shift';
 
   return (
-    <div className="pointer-events-none absolute inset-x-3 top-3 z-40 flex flex-wrap items-start gap-3">
+    <div className="pointer-events-none absolute inset-x-3 top-3 z-40 flex flex-wrap items-start gap-2">
       <Panel className="pointer-events-auto flex items-center gap-3 px-3 py-2">
         <IconButton onClick={() => setLeftOpen(!leftOpen)} title="Toggle operations panel" active={leftOpen}>
           <PanelLeft size={16} />
         </IconButton>
         <Logo />
-        <div className="leading-tight">
+        <div className="hidden leading-tight min-[1380px]:block">
           <div className="text-[17px] font-bold tracking-tight">
             Bin<span className="text-neon">Sight</span>
           </div>
-          <div className="eyebrow hidden !text-[9px] xl:block">Smart waste digital twin</div>
+          <div className="eyebrow hidden !text-[9px] 2xl:block">Smart waste digital twin</div>
         </div>
       </Panel>
 
-      <Panel className="pointer-events-auto flex items-center gap-3 px-3 py-2">
+      <Panel className="pointer-events-auto flex items-center gap-2 px-3 py-2">
         <SkyIcon size={18} className="text-amber" />
         <div className="leading-tight">
           <div className="tabular font-mono text-[17px] font-semibold">
@@ -66,7 +66,6 @@ export function TopBar() {
           </div>
           <div className={`eyebrow !text-[9px] ${shift === -1 ? '' : '!text-neon'}`}>{shiftLabel}</div>
         </div>
-        <div className="mx-1 h-8 w-px bg-white/10" />
         {mode === 'live' ? (
           <div className="flex items-center gap-2 rounded-lg bg-white/[0.04] px-2.5 py-1 font-mono text-[11px] text-slate-300 ring-1 ring-white/10" title="The cloud runs the clock in Live mode">
             <Cloud size={13} className="text-neon" />

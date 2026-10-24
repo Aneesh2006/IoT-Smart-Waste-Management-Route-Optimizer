@@ -22,12 +22,17 @@ import { Trucks } from './Trucks.tsx';
 
 /** After a few seconds, drop to performance mode once if frames are slow (weak laptops, projectors). */
 function FpsWatchdog() {
-  const acc = useMemo(() => ({ t: 0, frames: 0, done: false }), []);
+  const acc = useMemo(() => ({ warm: 0, t: 0, frames: 0, done: false }), []);
   useFrame((_, dt) => {
     if (acc.done) return;
+    // Skip the first seconds: shader compilation and asset upload make them slow everywhere.
+    if (acc.warm < 3) {
+      acc.warm += dt;
+      return;
+    }
     acc.t += dt;
     acc.frames++;
-    if (acc.t < 5) return;
+    if (acc.t < 4) return;
     acc.done = true;
     const fps = acc.frames / acc.t;
     const s = useApp.getState();

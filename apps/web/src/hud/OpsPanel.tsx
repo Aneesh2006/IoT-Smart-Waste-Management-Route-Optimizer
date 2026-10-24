@@ -4,6 +4,7 @@ import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
 import { Sparkline } from './Sparkline.tsx';
+import { CitySetup } from './CitySetup.tsx';
 import { LivePanel } from './LivePanel.tsx';
 import { Bar, Panel, Section, Segmented, Stat } from './ui.tsx';
 
@@ -149,6 +150,8 @@ export function OpsPanel() {
           <Scale size={14} /> Compare all policies
         </button>
       </Section>
+
+      {useApp.getState().mode === 'sandbox' && <CitySetup key={sim.config.seed + sim.config.bins} />}
 
       <Section title="Chaos lab" hint="Break something and watch the city cope">
         <div className="space-y-1">
