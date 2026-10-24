@@ -1,11 +1,11 @@
 import { CHAOS_INFO, CHAOS_ORDER, POLICIES, policyOrder, type ChaosKind, type Construction } from '@binsight/core';
 import { Code2, CloudRain, FileText, Leaf, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
+import { Suspense, lazy } from 'react';
 import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
-import { Sparkline } from './Sparkline.tsx';
 import { CitySetup } from './CitySetup.tsx';
-import { LivePanel } from './LivePanel.tsx';
+import { Sparkline } from './Sparkline.tsx';
 import { Bar, Panel, Section, Segmented, Stat } from './ui.tsx';
 
 const CHAOS_ICON: Record<ChaosKind, React.ReactNode> = {
@@ -15,6 +15,8 @@ const CHAOS_ICON: Record<ChaosKind, React.ReactNode> = {
   sensors: <WifiOff size={15} />,
   fire: <Flame size={15} />,
 };
+
+const LivePanel = lazy(() => import('./LivePanel.tsx').then((m) => ({ default: m.LivePanel })));
 
 export function OpsPanel() {
   useApp((s) => s.tick);
@@ -36,7 +38,11 @@ export function OpsPanel() {
 
   return (
     <Panel className="scroll-thin pointer-events-auto max-h-full w-[330px] overflow-y-auto">
-      {useApp.getState().mode === 'live' && <LivePanel />}
+      {useApp.getState().mode === 'live' && (
+        <Suspense fallback={null}>
+          <LivePanel />
+        </Suspense>
+      )}
       <Section title="City pulse" right={<span className="tabular font-mono text-[11px] text-slate-400">{total} bins</span>}>
         <div className="mb-2 flex h-2.5 overflow-hidden rounded-full ring-1 ring-white/10">
           {(Object.keys(bands) as FillBand[]).map((k) => (

@@ -1,11 +1,10 @@
 import { PROFILES, explainBin, type Simulation } from '@binsight/core';
 import { Battery, Crosshair, Flame, Smartphone, Thermometer, Truck, Wind, X } from 'lucide-react';
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { DISTRICT_LABEL, STREAM_COLORS, TRUCK_COLORS, fillCss } from '../lib/colors.ts';
 import { fmtAgo, fmtHours, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
 import { BinAnatomy, BinMqtt } from './BinInternals.tsx';
-import { JoinCard } from './JoinCard.tsx';
 import { Sparkline } from './Sparkline.tsx';
 import { Bar, IconButton, Panel, Section, Segmented } from './ui.tsx';
 
@@ -17,6 +16,8 @@ const STATUS_LABEL = {
   returning: 'Returning',
   broken: 'Broken down',
 } as const;
+
+const JoinCard = lazy(() => import('./JoinCard.tsx').then((m) => ({ default: m.JoinCard })));
 
 export function Inspector() {
   useApp((s) => s.tick);
@@ -255,7 +256,11 @@ function Fleet({ sim }: { sim: Simulation }) {
   const { selectTruck } = useApp.getState();
   return (
     <>
-      <JoinCard />
+      {useApp.getState().mode === 'live' && (
+        <Suspense fallback={null}>
+          <JoinCard />
+        </Suspense>
+      )}
       <Section title="Fleet" right={<span className="font-mono text-[10px] text-slate-500">click to follow</span>}>
         <div className="space-y-1.5">
           {sim.trucks.map((t) => {

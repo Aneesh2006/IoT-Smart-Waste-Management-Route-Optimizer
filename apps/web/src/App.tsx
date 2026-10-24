@@ -1,21 +1,26 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect, type ComponentType } from 'react';
 import { AudioCues } from './hud/AudioCues.tsx';
 import { BottomBar } from './hud/BottomBar.tsx';
 import { CommandPalette } from './hud/CommandPalette.tsx';
-import { ComparePanel } from './hud/ComparePanel.tsx';
-import { GuideModal } from './hud/GuideModal.tsx';
-import { ImpactPanel } from './hud/ImpactPanel.tsx';
 import { Inspector } from './hud/Inspector.tsx';
-import { LabPanel } from './hud/LabPanel.tsx';
 import { OpsPanel } from './hud/OpsPanel.tsx';
-import { PolicyEditor } from './hud/PolicyEditor.tsx';
-import { ReportView } from './hud/ReportView.tsx';
 import { SceneLabels } from './hud/SceneLabels.tsx';
 import { TopBar } from './hud/TopBar.tsx';
-import { XRay } from './hud/XRay.tsx';
 import { Presenter } from './present/Presenter.tsx';
 import { CityCanvas } from './scene/CityCanvas.tsx';
 import { SPEEDS, useApp } from './state/store.ts';
+
+/** Panels are fetched the first time they open, so the city appears sooner. */
+function lazyPanel<K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) {
+  return lazy(() => load().then((m) => ({ default: m[name] })));
+}
+const ComparePanel = lazyPanel(() => import('./hud/ComparePanel.tsx'), 'ComparePanel');
+const LabPanel = lazyPanel(() => import('./hud/LabPanel.tsx'), 'LabPanel');
+const GuideModal = lazyPanel(() => import('./hud/GuideModal.tsx'), 'GuideModal');
+const PolicyEditor = lazyPanel(() => import('./hud/PolicyEditor.tsx'), 'PolicyEditor');
+const XRay = lazyPanel(() => import('./hud/XRay.tsx'), 'XRay');
+const ImpactPanel = lazyPanel(() => import('./hud/ImpactPanel.tsx'), 'ImpactPanel');
+const ReportView = lazyPanel(() => import('./hud/ReportView.tsx'), 'ReportView');
 
 function useHotkeys() {
   useEffect(() => {
@@ -85,13 +90,37 @@ function Toast() {
   );
 }
 
+function Overlays() {
+  const compare = useApp((st) => st.compareOpen);
+  const lab = useApp((st) => st.labOpen);
+  const guide = useApp((st) => st.guideOpen);
+  const editor = useApp((st) => st.editorOpen);
+  const xray = useApp((st) => st.xrayOpen);
+  const impact = useApp((st) => st.impactOpen);
+  return (
+    <Suspense fallback={null}>
+      {compare && <ComparePanel />}
+      {lab && <LabPanel />}
+      {guide && <GuideModal />}
+      {editor && <PolicyEditor />}
+      {xray && <XRay />}
+      {impact && <ImpactPanel />}
+    </Suspense>
+  );
+}
+
 export function App() {
   useHotkeys();
   const leftOpen = useApp((s) => s.leftOpen);
   const clean = useApp((s) => s.clean);
   const report = useApp((s) => s.reportOpen);
   // The report replaces the whole app so it prints cleanly.
-  if (report) return <ReportView />;
+  if (report)
+    return (
+      <Suspense fallback={null}>
+        <ReportView />
+      </Suspense>
+    );
   return (
     <div className="fixed inset-0 select-none">
       <div className="absolute inset-0">
@@ -106,12 +135,7 @@ export function App() {
         </div>
         <BottomBar />
       </div>
-      <ComparePanel />
-      <LabPanel />
-      <GuideModal />
-      <PolicyEditor />
-      <XRay />
-      <ImpactPanel />
+      <Overlays />
       <Toast />
       <Presenter />
       <AudioCues />
