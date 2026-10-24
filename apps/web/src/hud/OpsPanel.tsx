@@ -1,5 +1,5 @@
 import { CHAOS_INFO, CHAOS_ORDER, COSTS, POLICIES, policyOrder, type ChaosKind, type Construction } from '@binsight/core';
-import { Code2, CloudRain, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
+import { Code2, CloudRain, Leaf, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
 import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
@@ -80,7 +80,14 @@ export function OpsPanel() {
         </p>
       </Section>
 
-      <Section title="Fleet totals" right={<span className="font-mono text-[10px] text-slate-500">since start</span>}>
+      <Section
+        title="Fleet totals"
+        right={
+          <button onClick={() => useApp.getState().setImpactOpen(true)} className="flex items-center gap-1 text-[11px] text-neon hover:underline" title="Where the waste goes (I)">
+            <Leaf size={12} /> Impact
+          </button>
+        }
+      >
         <div className="grid grid-cols-2 gap-2">
           <Stat label="Distance" value={fmtKm(m.distanceM)} />
           <Stat label="Diesel" value={`${m.fuelL.toFixed(1)} L`} />

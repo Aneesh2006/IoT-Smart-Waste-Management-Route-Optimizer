@@ -77,6 +77,14 @@ export const COSTS = {
   wastedBelow: 0.3,
 };
 
+/** What happens after the transfer station. Teaching assumptions, not measurements. */
+export const PROCESSING = {
+  /** Loose household waste, kg per litre. */
+  densityKgPerL: 0.25,
+  wetToCompost: 0.85,
+  dryToRecycling: 0.55,
+};
+
 export const SAMPLE_SECONDS = 15 * 60;
 const MAX_STEP = 10;
 const HISTORY_SAMPLES = 7 * 96;
@@ -167,6 +175,8 @@ export interface Metrics {
   tippedDryL: number;
   /** Litres collected per district. */
   collectedByDistrict: Partial<Record<DistrictKind, number>>;
+  /** Litres collected per `district:stream`, for the waste-flow diagram. */
+  collectedFlows: Record<string, number>;
 }
 
 /** A compact recording of the city every sensor sample, for time-lapse replay. */
@@ -221,6 +231,7 @@ const emptyMetrics = (): Metrics => ({
   tippedWetL: 0,
   tippedDryL: 0,
   collectedByDistrict: {},
+  collectedFlows: {},
 });
 
 export class Simulation {
@@ -290,7 +301,8 @@ export class Simulation {
         noise: 1,
         hourStartReading: start,
         collectedThisHour: false,
-        generatedL: 0,
+        // Count what was already in the bin, so collected never exceeds generated.
+        generatedL: start * site.capacityL,
         overflowHours: 0,
       };
     });
@@ -701,6 +713,8 @@ export class Simulation {
       this.metrics.visits++;
       this.metrics.collectedL += litres;
       this.metrics.collectedByDistrict[site.district] = (this.metrics.collectedByDistrict[site.district] ?? 0) + litres;
+      const flow = `${site.district}:${site.stream}`;
+      this.metrics.collectedFlows[flow] = (this.metrics.collectedFlows[flow] ?? 0) + litres;
       t.load += litres;
       b.fill -= litres / site.capacityL;
       if (b.fill < 1) b.overflowing = false;

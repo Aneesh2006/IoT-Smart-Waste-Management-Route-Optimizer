@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BottomBar } from './hud/BottomBar.tsx';
 import { ComparePanel } from './hud/ComparePanel.tsx';
 import { GuideModal } from './hud/GuideModal.tsx';
+import { ImpactPanel } from './hud/ImpactPanel.tsx';
 import { Inspector } from './hud/Inspector.tsx';
 import { LabPanel } from './hud/LabPanel.tsx';
 import { OpsPanel } from './hud/OpsPanel.tsx';
@@ -26,6 +27,7 @@ function useHotkeys() {
         if (s.guideOpen) return s.setGuideOpen(false);
         if (s.editorOpen) return s.setEditorOpen(false);
         if (s.xrayOpen) return s.setXrayOpen(false);
+        if (s.impactOpen) return s.setImpactOpen(false);
         if (s.replay) return s.exitReplay();
         s.selectBin(null);
         s.selectTruck(null);
@@ -36,6 +38,8 @@ function useHotkeys() {
       } else if (e.key === 'r') {
         if (s.replay) s.exitReplay();
         else s.startReplay();
+      } else if (e.key === 'i') {
+        s.setImpactOpen(!s.impactOpen);
       } else if (e.key === 'g') {
         s.cycleHeatmap();
       } else if (e.key === 'x') {
@@ -85,6 +89,7 @@ export function App() {
       <GuideModal />
       <PolicyEditor />
       <XRay />
+      <ImpactPanel />
       <Toast />
     </div>
   );

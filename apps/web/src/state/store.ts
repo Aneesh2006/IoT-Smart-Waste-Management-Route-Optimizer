@@ -30,6 +30,7 @@ interface AppState {
   guideOpen: boolean;
   editorOpen: boolean;
   xrayOpen: boolean;
+  impactOpen: boolean;
   heatmap: HeatMode;
   /** Time-lapse of the recorded tape; the scene draws the tape frame instead of the live sim. */
   replay: { index: number; playing: boolean } | null;
@@ -63,6 +64,7 @@ interface AppState {
   setGuideOpen(open: boolean): void;
   setEditorOpen(open: boolean): void;
   setXrayOpen(open: boolean): void;
+  setImpactOpen(open: boolean): void;
   cycleHeatmap(): void;
   startReplay(): void;
   setReplay(r: { index: number; playing: boolean }): void;
@@ -141,6 +143,7 @@ export const useApp = create<AppState>((set, get) => ({
   guideOpen: !guideSeen(),
   editorOpen: false,
   xrayOpen: false,
+  impactOpen: false,
   heatmap: 'off',
   replay: null,
   toast: null,
@@ -231,6 +234,7 @@ export const useApp = create<AppState>((set, get) => ({
   setReplay: (replay) => set({ replay }),
   exitReplay: () => set({ replay: null, paused: false }),
   cycleHeatmap: () => set((s) => ({ heatmap: HEAT_MODES[(HEAT_MODES.indexOf(s.heatmap) + 1) % HEAT_MODES.length] })),
+  setImpactOpen: (open) => set({ impactOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false, xrayOpen: false }),
   setXrayOpen: (open) => set({ xrayOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false }),
   setEditorOpen: (open) => set({ editorOpen: open, compareOpen: false, labOpen: false, guideOpen: false }),
   showToast: (text) => {
