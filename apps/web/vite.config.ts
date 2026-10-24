@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -13,8 +14,23 @@ const watchCore = (): Plugin => ({
   },
 });
 
+/** Emit sw.js with the build's version and every output file to precache. */
+const serviceWorker = (): Plugin => ({
+  name: 'binsight:service-worker',
+  apply: 'build',
+  generateBundle(_, bundle) {
+    const files = Object.keys(bundle).filter((f) => !f.endsWith('.map') && f !== 'index.html');
+    const template = readFileSync(fileURLToPath(new URL('./sw.template.js', import.meta.url)), 'utf8');
+    this.emitFile({
+      type: 'asset',
+      fileName: 'sw.js',
+      source: template.replace('__VERSION__', Date.now().toString(36)).replace('__FILES__', JSON.stringify(['index.html', 'favicon.svg', ...files])),
+    });
+  },
+});
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), watchCore()],
+  plugins: [react(), tailwindcss(), watchCore(), serviceWorker()],
   // Polling: native file events are unreliable on some Windows setups and edits get missed.
   server: { port: 5173, host: true, watch: { usePolling: true, interval: 250 } },
   build: { chunkSizeWarningLimit: 2000 },

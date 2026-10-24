@@ -264,13 +264,25 @@ export class BinSightStack extends Stack {
       userPoolClientId: operatorClient.userPoolClientId,
     };
     if (existsSync(WEB_DIST)) {
-      new s3deploy.BucketDeployment(this, 'DeploySite', {
+      // Hashed assets never change, so browsers may keep them for a year...
+      const assets = new s3deploy.BucketDeployment(this, 'DeployAssets', {
         destinationBucket: site,
-        sources: [s3deploy.Source.asset(WEB_DIST), s3deploy.Source.jsonData('live-config.json', liveConfig)],
+        sources: [s3deploy.Source.asset(WEB_DIST, { exclude: ['index.html', 'sw.js'] })],
+        cacheControl: [s3deploy.CacheControl.fromString('public, max-age=31536000, immutable')],
+        prune: false,
+        memoryLimit: 512,
+      });
+      // ...while the page shell, the service worker and the live config are always revalidated.
+      const shell = new s3deploy.BucketDeployment(this, 'DeployShell', {
+        destinationBucket: site,
+        sources: [s3deploy.Source.asset(WEB_DIST, { exclude: ['*', '!index.html', '!sw.js'] }), s3deploy.Source.jsonData('live-config.json', liveConfig)],
+        cacheControl: [s3deploy.CacheControl.fromString('no-cache')],
+        prune: false,
         distribution: cdn,
         distributionPaths: ['/*'],
         memoryLimit: 512,
       });
+      shell.node.addDependency(assets);
     }
 
     // ---------------------------------------------------------------- guard rails

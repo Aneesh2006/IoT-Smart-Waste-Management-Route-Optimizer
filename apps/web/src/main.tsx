@@ -15,6 +15,13 @@ if (window.location.pathname.startsWith('/bin')) {
   void import('./App.tsx').then(({ App }) => root.render(<App />));
 }
 
+// Offline support in production builds: the service worker precaches the whole app.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+  });
+}
+
 // Dev-only handles so the scene can be driven from devtools (or a hidden preview pane).
 if (import.meta.env.DEV) {
   void Promise.all([import('@react-three/fiber'), import('./state/store.ts')]).then(([fiber, store]) => {
