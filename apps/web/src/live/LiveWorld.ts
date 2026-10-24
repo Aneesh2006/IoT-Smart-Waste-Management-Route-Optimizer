@@ -151,6 +151,7 @@ export class LiveWorld extends Simulation {
       if (!t) continue;
       t.status = n.st;
       t.load = n.load;
+      if (n.si !== undefined) t.stopIndex = n.si;
       if (!this.frameAt) {
         t.x = n.x;
         t.z = n.z;
@@ -188,6 +189,7 @@ export class LiveWorld extends Simulation {
     for (const truck of this.trucks) {
       const t = byTruck.get(truck.id);
       truck.route = t ? this.routeFrom(t.start, t.nodes) : null;
+      if (truck.route && t?.stops) truck.route.stops = t.stops.map((s) => ({ ...s, at: 0 }));
     }
     if (r.plan) {
       this.lastPlan = {

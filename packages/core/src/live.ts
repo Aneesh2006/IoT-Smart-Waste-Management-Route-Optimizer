@@ -4,7 +4,7 @@
  */
 import { hashString } from './rng.ts';
 import type { PolicyId } from './policies.ts';
-import type { ChaosEvent, Metrics, TruckStatus } from './sim.ts';
+import type { ChaosEvent, Metrics, Simulation, TruckStatus } from './sim.ts';
 import type { City } from './types.ts';
 
 export const topics = {
@@ -90,6 +90,14 @@ export interface TruckFrame {
   h: number;
   st: TruckStatus;
   load: number;
+  /** Index of the next stop in this truck's route. */
+  si?: number;
+}
+
+export interface RouteStopFrame {
+  kind: 'bin' | 'unload' | 'depot';
+  node: number;
+  binId?: number;
 }
 
 export interface FleetFrame {
@@ -111,7 +119,7 @@ export interface RoutesFrame {
   world: string;
   routeVersion: number;
   /** Each route as its start point plus the graph nodes it drives through. */
-  trucks: { id: number; start: [number, number]; nodes: number[] }[];
+  trucks: { id: number; start: [number, number]; nodes: number[]; stops?: RouteStopFrame[] }[];
   plan?: { policy: PolicyId; bins: number; trips: number; km: number; ms: number; time: number };
 }
 
@@ -205,3 +213,42 @@ export function phonePlacement(city: City, id: string): { x: number; z: number }
 }
 
 export const PHONE_EMOJI = ['🐯', '🦊', '🐼', '🐸', '🦁', '🐵', '🐙', '🦄', '🐝', '🐳', '🦖', '🐧'];
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/** The twice-a-second fleet message, built from a simulation. */
+export function buildFleetFrame(sim: Simulation, world: string, speed: number, withMetrics: boolean): FleetFrame {
+  return {
+    world,
+    simT: sim.time,
+    wallT: Date.now(),
+    speed,
+    policy: sim.config.policy,
+    trucks: sim.trucks.map((t) => ({ id: t.id, x: round1(t.x), z: round1(t.z), h: Math.round(t.heading * 100) / 100, st: t.status, load: Math.round(t.load), si: t.stopIndex })),
+    fires: [...sim.fires.keys()],
+    closed: sim.closures.flatMap((c) => c.edges),
+    festival: sim.festivalUntil > sim.time,
+    routeVersion: sim.routeVersion,
+    metrics: withMetrics ? sim.metrics : undefined,
+  };
+}
+
+/** The retained routes message, built from a simulation. */
+export function buildRoutesFrame(sim: Simulation, world: string): RoutesFrame {
+  const plan = sim.lastPlan;
+  return {
+    world,
+    routeVersion: sim.routeVersion,
+    trucks: sim.trucks
+      .filter((t) => t.route && t.status !== 'broken')
+      .map((t) => ({
+        id: t.id,
+        start: [round1(t.route!.xs[0]), round1(t.route!.zs[0])] as [number, number],
+        nodes: t.route!.nodes.slice(1),
+        stops: t.route!.stops.map((s) => ({ kind: s.kind, node: s.node, binId: s.binId })),
+      })),
+    plan: plan
+      ? { policy: plan.policy, bins: plan.binIds.length, trips: plan.solution.tripCount, km: Math.round(plan.solution.totalLength) / 1000, ms: Math.round(plan.solution.ms), time: plan.time }
+      : undefined,
+  };
+}

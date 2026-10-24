@@ -5,10 +5,12 @@ import './index.css';
 
 const root = createRoot(document.getElementById('root')!);
 
-// /bin is the phone page: load it on its own so phones never download the 3D engine.
+// /bin (audience) and /driver (crew) are phone pages: load them on their own so phones never download the 3D engine.
 // No StrictMode: its double-mounted effects would open two MQTT connections in development.
 if (window.location.pathname.startsWith('/bin')) {
   void import('./phone/PhoneApp.tsx').then(({ PhoneApp }) => root.render(<PhoneApp />));
+} else if (window.location.pathname.startsWith('/driver')) {
+  void import('./phone/DriverApp.tsx').then(({ DriverApp }) => root.render(<DriverApp />));
 } else {
   void import('./App.tsx').then(({ App }) => root.render(<App />));
 }

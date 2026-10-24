@@ -1,5 +1,5 @@
 import { PROFILES, type Simulation } from '@binsight/core';
-import { Battery, Crosshair, Flame, Thermometer, Truck, Wind, X } from 'lucide-react';
+import { Battery, Crosshair, Flame, Smartphone, Thermometer, Truck, Wind, X } from 'lucide-react';
 import { useState } from 'react';
 import { DISTRICT_LABEL, STREAM_COLORS, TRUCK_COLORS, fillCss } from '../lib/colors.ts';
 import { fmtAgo, fmtHours, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
@@ -210,6 +210,14 @@ function TruckCard({ sim, id }: { sim: Simulation; id: number }) {
           <KV k="Odometer" v={fmtKm(t.odometer)} />
           <KV k="Busy" v={`${(t.busySeconds / 3600).toFixed(1)} h`} />
         </div>
+        <a
+          href={`/driver?truck=${id}${useApp.getState().mode === 'live' ? '' : '&demo'}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-white/[0.04] px-3 py-2 text-[12px] text-slate-200 ring-1 ring-white/10 hover:bg-white/[0.08]"
+        >
+          <Smartphone size={13} /> Open the crew app for {t.name}
+        </a>
       </Section>
     </>
   );

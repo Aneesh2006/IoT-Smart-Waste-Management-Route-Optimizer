@@ -2,13 +2,13 @@ import {
   DAY,
   LIVE_START_SIM_T,
   Simulation,
+  buildFleetFrame,
+  buildRoutesFrame,
   simTimeAt,
   topics,
   worldKey,
-  type FleetFrame,
   type LiveControl,
   type LiveEvent,
-  type RoutesFrame,
   type Telemetry,
 } from '@binsight/core';
 import type { Context } from 'aws-lambda';
@@ -114,41 +114,12 @@ export const handler = async (_event: unknown, context: Context) => {
     if (target > sim.time) sim.advance(target - sim.time);
 
     const jobs: Promise<unknown>[] = [];
-    const fleet: FleetFrame = {
-      world,
-      simT: sim.time,
-      wallT: now,
-      speed: control.running ? control.speed : 0,
-      policy: sim.config.policy,
-      trucks: sim.trucks.map((t) => ({ id: t.id, x: round(t.x), z: round(t.z), h: Math.round(t.heading * 100) / 100, st: t.status, load: Math.round(t.load) })),
-      fires: [...sim.fires.keys()],
-      closed: sim.closures.flatMap((c) => c.edges),
-      festival: sim.festivalUntil > sim.time,
-      routeVersion: sim.routeVersion,
-      metrics: frame % 4 === 0 ? sim.metrics : undefined,
-    };
+    const fleet = buildFleetFrame(sim, world, control.running ? control.speed : 0, frame % 4 === 0);
     jobs.push(publish(topics.fleet(control.city), fleet));
 
     if (sim.routeVersion !== routeVersion) {
       routeVersion = sim.routeVersion;
-      const plan = sim.lastPlan;
-      const routes: RoutesFrame = {
-        world,
-        routeVersion,
-        trucks: sim.trucks
-          .filter((t) => t.route && t.status !== 'broken')
-          .map((t) => ({ id: t.id, start: [round(t.route!.xs[0]), round(t.route!.zs[0])], nodes: t.route!.nodes.slice(1) })),
-        plan: plan
-          ? {
-              policy: plan.policy,
-              bins: plan.binIds.length,
-              trips: plan.solution.tripCount,
-              km: Math.round(plan.solution.totalLength) / 1000,
-              ms: Math.round(plan.solution.ms),
-              time: plan.time,
-            }
-          : undefined,
-      };
+      const routes = buildRoutesFrame(sim, world);
       // Retained, so a browser that connects later still gets the current routes.
       jobs.push(publish(topics.routes(control.city), routes, true));
     }
@@ -189,4 +160,3 @@ export const handler = async (_event: unknown, context: Context) => {
   return { frames, messages, simT: sim.time };
 };
 
-const round = (v: number) => Math.round(v * 10) / 10;
