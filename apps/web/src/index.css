@@ -67,3 +67,25 @@ input[type='range'] {
   from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
   to { opacity: 1; transform: none; filter: none; }
 }
+
+/* The results report prints across as many pages as it needs. */
+@page {
+  size: A4;
+  margin: 16mm 14mm;
+}
+@media print {
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: visible;
+    background: #fff;
+  }
+  .report-root table,
+  .report-root figure {
+    break-inside: avoid;
+  }
+  .report-root h2 {
+    break-after: avoid;
+  }
+}

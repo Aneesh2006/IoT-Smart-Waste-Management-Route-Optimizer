@@ -31,6 +31,7 @@ interface AppState {
   editorOpen: boolean;
   xrayOpen: boolean;
   impactOpen: boolean;
+  reportOpen: boolean;
   /** Presentation: slow camera orbit, panels hidden, scene index. */
   orbit: boolean;
   clean: boolean;
@@ -73,6 +74,7 @@ interface AppState {
   setEditorOpen(open: boolean): void;
   setXrayOpen(open: boolean): void;
   setImpactOpen(open: boolean): void;
+  setReportOpen(open: boolean): void;
   closeOverlays(): void;
   toggleSound(): void;
   setQuality(q: 'high' | 'low', auto?: boolean): void;
@@ -155,6 +157,7 @@ export const useApp = create<AppState>((set, get) => ({
   editorOpen: false,
   xrayOpen: false,
   impactOpen: false,
+  reportOpen: false,
   orbit: false,
   clean: false,
   present: null,
@@ -279,6 +282,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ sound: on });
   },
   closeOverlays: () => set({ compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false, xrayOpen: false, impactOpen: false }),
+  setReportOpen: (open) => set({ reportOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false, xrayOpen: false, impactOpen: false }),
   setImpactOpen: (open) => set({ impactOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false, xrayOpen: false }),
   setXrayOpen: (open) => set({ xrayOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false }),
   setEditorOpen: (open) => set({ editorOpen: open, compareOpen: false, labOpen: false, guideOpen: false }),

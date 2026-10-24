@@ -8,6 +8,7 @@ import { Inspector } from './hud/Inspector.tsx';
 import { LabPanel } from './hud/LabPanel.tsx';
 import { OpsPanel } from './hud/OpsPanel.tsx';
 import { PolicyEditor } from './hud/PolicyEditor.tsx';
+import { ReportView } from './hud/ReportView.tsx';
 import { SceneLabels } from './hud/SceneLabels.tsx';
 import { TopBar } from './hud/TopBar.tsx';
 import { XRay } from './hud/XRay.tsx';
@@ -20,6 +21,10 @@ function useHotkeys() {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const s = useApp.getState();
+      if (s.reportOpen) {
+        if (e.key === 'Escape') s.setReportOpen(false);
+        return;
+      }
       if (e.code === 'Space') {
         e.preventDefault();
         s.togglePause();
@@ -77,6 +82,9 @@ export function App() {
   useHotkeys();
   const leftOpen = useApp((s) => s.leftOpen);
   const clean = useApp((s) => s.clean);
+  const report = useApp((s) => s.reportOpen);
+  // The report replaces the whole app so it prints cleanly.
+  if (report) return <ReportView />;
   return (
     <div className="fixed inset-0 select-none">
       <div className="absolute inset-0">

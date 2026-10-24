@@ -1,5 +1,5 @@
 import { CHAOS_INFO, CHAOS_ORDER, COSTS, POLICIES, policyOrder, type ChaosKind, type Construction } from '@binsight/core';
-import { Code2, CloudRain, Leaf, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
+import { Code2, CloudRain, FileText, Leaf, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
 import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
@@ -148,6 +148,13 @@ export function OpsPanel() {
           title="Run every policy over the same seeded week (C)"
         >
           <Scale size={14} /> Compare all policies
+        </button>
+        <button
+          onClick={() => useApp.getState().setReportOpen(true)}
+          className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-xl bg-white/[0.04] px-3 py-2 text-[12.5px] font-medium text-slate-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]"
+          title="A printable results report for the submission"
+        >
+          <FileText size={14} /> Results report (PDF)
         </button>
       </Section>
 
