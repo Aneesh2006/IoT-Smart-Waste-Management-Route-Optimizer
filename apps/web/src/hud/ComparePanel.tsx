@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { POLICY_COLORS } from '../lib/colors.ts';
 import { fmtInr, fmtInt } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
+import { SeedStudy } from './SeedStudy.tsx';
 import { IconButton, Panel, Segmented } from './ui.tsx';
 
 type Column = {
@@ -39,10 +40,11 @@ export function ComparePanel() {
   const { setCompareOpen, setCompareScenario } = useApp.getState();
   const [days, setDays] = useState(7);
   const [rows, setRows] = useState<CompareRow[]>([]);
+  const [scope, setScope] = useState<'one' | 'many'>('one');
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || scope === 'many') return;
     setRows([]);
     setRunning(true);
     const worker = new Worker(new URL('../workers/compare.worker.ts', import.meta.url), { type: 'module' });
@@ -54,7 +56,7 @@ export function ComparePanel() {
     };
     worker.postMessage({ config: { ...structuredClone(sim.config), events: scenarioEvents(scenario) }, days, customCode: customPolicyCode() });
     return () => worker.terminate();
-  }, [open, days, sim, scenario]);
+  }, [open, days, sim, scenario, scope]);
 
   if (!open) return null;
 
@@ -77,7 +79,17 @@ export function ComparePanel() {
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <Segmented
+                size="sm"
+                value={scope}
+                onChange={setScope}
+                options={[
+                  { value: 'one', label: 'This city' },
+                  { value: 'many', label: 'Is it luck? (8 cities)', title: 'Every policy on 8 different seeded cities' },
+                ]}
+              />
               <select
+                hidden={scope === 'many'}
                 value={scenario}
                 onChange={(e) => setCompareScenario(e.target.value as ChaosKind | 'none')}
                 className="rounded-lg bg-white/[0.06] px-2 py-1 text-[12px] text-slate-200 ring-1 ring-white/10 outline-none"
@@ -102,6 +114,10 @@ export function ComparePanel() {
             </div>
           </div>
 
+          {scope === 'many' ? (
+            <SeedStudy config={sim.config} days={days} />
+          ) : (
+            <>
           {fixed && smart && <Headline fixed={fixed} smart={smart} />}
 
           <div className="overflow-x-auto px-5 py-3">
@@ -168,6 +184,8 @@ export function ComparePanel() {
               <LineChart rows={rows} days={days} pick={(r) => r.distanceKm} unit="km" width={380} />
             </div>
           </div>
+            </>
+          )}
         </div>
       </Panel>
     </div>

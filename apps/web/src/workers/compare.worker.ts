@@ -1,15 +1,23 @@
 /// <reference lib="webworker" />
 import { installCustomPolicy, policyOrder, runPolicy, type PolicyId, type SimConfig } from '@binsight/core';
 
-/** Every policy on one city (Compare), or one policy on several cities (capacity planner). */
+/**
+ * Every policy on one city (Compare), one policy on several city variants
+ * (capacity planner), or every policy on several seeds (Compare's "is it luck?").
+ */
 export type CompareRequest =
   | { config: Partial<SimConfig>; days: number; customCode: string | null }
-  | { variants: { name: string; config: Partial<SimConfig> }[]; policy: PolicyId; days: number; customCode: string | null };
+  | { variants: { name: string; config: Partial<SimConfig> }[]; policy: PolicyId; days: number; customCode: string | null }
+  | { seeds: string[]; config: Partial<SimConfig>; days: number; customCode: string | null };
 
 self.onmessage = (e: MessageEvent<CompareRequest>) => {
   const req = e.data;
   installCustomPolicy(req.customCode);
-  if ('variants' in req) {
+  if ('seeds' in req) {
+    for (const seed of req.seeds) {
+      for (const policy of policyOrder()) self.postMessage({ type: 'row', name: seed, row: runPolicy({ ...req.config, seed }, policy, req.days) });
+    }
+  } else if ('variants' in req) {
     for (const v of req.variants) self.postMessage({ type: 'row', name: v.name, row: runPolicy(v.config, req.policy, req.days) });
   } else {
     for (const policy of policyOrder()) self.postMessage({ type: 'row', row: runPolicy(req.config, policy, req.days) });
