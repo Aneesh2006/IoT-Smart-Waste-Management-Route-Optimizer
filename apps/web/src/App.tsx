@@ -84,8 +84,8 @@ export function App() {
       <SceneLabels />
       <div className={`transition-opacity duration-500 ${clean ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
         <TopBar />
-        <div className="pointer-events-none absolute bottom-[156px] left-3 top-[76px] z-40 flex">{leftOpen && <OpsPanel />}</div>
-        <div className="pointer-events-none absolute bottom-[156px] right-3 top-[76px] z-40 hidden md:flex">
+        <div className="pointer-events-none absolute bottom-[196px] left-3 top-[76px] z-40 flex">{leftOpen && <OpsPanel />}</div>
+        <div className="pointer-events-none absolute bottom-[196px] right-3 top-[76px] z-40 hidden md:flex">
           <Inspector />
         </div>
         <BottomBar />

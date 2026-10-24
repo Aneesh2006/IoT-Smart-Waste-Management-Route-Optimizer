@@ -10,6 +10,7 @@ import { Bins } from './Bins.tsx';
 import { Buildings } from './Buildings.tsx';
 import { Facilities } from './Facilities.tsx';
 import { Greenery } from './Greenery.tsx';
+import { CameraProbe } from './cameraProbe.tsx';
 import { Hazards } from './Hazards.tsx';
 import { Heatmap } from './Heatmap.tsx';
 import { PhoneBins } from './PhoneBins.tsx';
@@ -137,6 +138,7 @@ export function CityCanvas() {
         <SimDriver />
         <CameraRig />
         <FpsWatchdog />
+        <CameraProbe />
         <LabelProjector />
         <MapControls
           makeDefault

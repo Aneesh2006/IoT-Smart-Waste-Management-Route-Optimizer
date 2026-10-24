@@ -76,12 +76,14 @@ export function TopBar() {
             <IconButton onClick={togglePause} title={paused ? 'Play (Space)' : 'Pause (Space)'} active={!paused}>
               {paused ? <Play size={16} /> : <Pause size={16} />}
             </IconButton>
+            <div className="hidden sm:block">
             <Segmented
               size="sm"
               value={speed}
               onChange={setSpeed}
               options={SPEEDS.map((s, i) => ({ value: s, label: speedLabel(s), title: `${s}× real time (key ${i + 1})` }))}
             />
+            </div>
             <IconButton onClick={skipToNextShift} title="Skip to the next shift (N)">
               <FastForward size={16} />
             </IconButton>
@@ -92,7 +94,7 @@ export function TopBar() {
         )}
       </Panel>
 
-      <Panel className="pointer-events-auto flex items-center gap-2 px-3 py-2">
+      <Panel className="pointer-events-auto hidden items-center gap-2 px-3 py-2 md:flex">
         <IconButton onClick={toggleDataView} title="Data view: ghost the buildings (V)" active={dataView}>
           <Layers size={16} />
         </IconButton>
