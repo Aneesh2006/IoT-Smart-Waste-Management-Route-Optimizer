@@ -54,6 +54,11 @@ size and speed.
 | V | data view (ghost the buildings) |
 | C | compare policies |
 | L | algorithm lab |
+| X | cloud X-Ray |
+| G | heatmap (fill → overflow → generated) |
+| R | time-lapse replay |
+| I | impact (waste-flow Sankey) |
+| P | presentation mode (→ next, ← back, Esc end; clickers work) |
 | ? | guide |
 | Esc | close / clear selection |
 

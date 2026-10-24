@@ -10,6 +10,7 @@ import { PolicyEditor } from './hud/PolicyEditor.tsx';
 import { SceneLabels } from './hud/SceneLabels.tsx';
 import { TopBar } from './hud/TopBar.tsx';
 import { XRay } from './hud/XRay.tsx';
+import { Presenter } from './present/Presenter.tsx';
 import { CityCanvas } from './scene/CityCanvas.tsx';
 import { SPEEDS, useApp } from './state/store.ts';
 
@@ -38,6 +39,8 @@ function useHotkeys() {
       } else if (e.key === 'r') {
         if (s.replay) s.exitReplay();
         else s.startReplay();
+      } else if (e.key === 'p') {
+        void import('./present/scenes.ts').then((m) => m.startPresentation());
       } else if (e.key === 'i') {
         s.setImpactOpen(!s.impactOpen);
       } else if (e.key === 'g') {
@@ -72,18 +75,21 @@ function Toast() {
 export function App() {
   useHotkeys();
   const leftOpen = useApp((s) => s.leftOpen);
+  const clean = useApp((s) => s.clean);
   return (
     <div className="fixed inset-0 select-none">
       <div className="absolute inset-0">
         <CityCanvas />
       </div>
       <SceneLabels />
-      <TopBar />
-      <div className="pointer-events-none absolute bottom-[156px] left-3 top-[76px] z-40 flex">{leftOpen && <OpsPanel />}</div>
-      <div className="pointer-events-none absolute bottom-[156px] right-3 top-[76px] z-40 hidden md:flex">
-        <Inspector />
+      <div className={`transition-opacity duration-500 ${clean ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
+        <TopBar />
+        <div className="pointer-events-none absolute bottom-[156px] left-3 top-[76px] z-40 flex">{leftOpen && <OpsPanel />}</div>
+        <div className="pointer-events-none absolute bottom-[156px] right-3 top-[76px] z-40 hidden md:flex">
+          <Inspector />
+        </div>
+        <BottomBar />
       </div>
-      <BottomBar />
       <ComparePanel />
       <LabPanel />
       <GuideModal />
@@ -91,6 +97,7 @@ export function App() {
       <XRay />
       <ImpactPanel />
       <Toast />
+      <Presenter />
     </div>
   );
 }

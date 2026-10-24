@@ -1,5 +1,5 @@
 import { DAY, HOUR, clockParts } from '@binsight/core';
-import { CircleHelp, Cloud, Flame, History, Radar, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
+import { CircleHelp, Cloud, Flame, Gauge, History, Presentation, Radar, Dices, FastForward, Layers, Link2, Moon, Pause, PanelLeft, Play, Sun, Sunrise } from 'lucide-react';
 import { SPEEDS, useApp } from '../state/store.ts';
 import { IconButton, Panel, Segmented } from './ui.tsx';
 
@@ -32,6 +32,7 @@ export function TopBar() {
   const mode = useApp((s) => s.mode);
   const liveStatus = useApp((s) => s.liveStatus);
   const liveControl = useApp((s) => s.liveControl);
+  const quality = useApp((s) => s.quality);
   const { setSpeed, togglePause, skipToNextShift, newCity, setLeftOpen, toggleDataView, setGuideOpen, copyShareLink, setMode } = useApp.getState();
 
   const c = clockParts(sim.time);
@@ -51,7 +52,7 @@ export function TopBar() {
           <div className="text-[17px] font-bold tracking-tight">
             Bin<span className="text-neon">Sight</span>
           </div>
-          <div className="eyebrow !text-[9px]">Smart waste digital twin</div>
+          <div className="eyebrow hidden !text-[9px] xl:block">Smart waste digital twin</div>
         </div>
       </Panel>
 
@@ -89,6 +90,9 @@ export function TopBar() {
             </IconButton>
           </>
         )}
+      </Panel>
+
+      <Panel className="pointer-events-auto flex items-center gap-2 px-3 py-2">
         <IconButton onClick={toggleDataView} title="Data view: ghost the buildings (V)" active={dataView}>
           <Layers size={16} />
         </IconButton>
@@ -97,6 +101,16 @@ export function TopBar() {
         </IconButton>
         <IconButton onClick={() => useApp.getState().setXrayOpen(true)} title="Cloud X-Ray: watch readings travel through AWS (X)">
           <Radar size={16} />
+        </IconButton>
+        <IconButton onClick={() => void import('../present/scenes.ts').then((m) => m.startPresentation())} title="Present: scripted demo with captions (P)">
+          <Presentation size={16} />
+        </IconButton>
+        <IconButton
+          onClick={() => useApp.getState().setQuality(quality === 'high' ? 'low' : 'high')}
+          title={quality === 'high' ? 'Graphics: high. Click for performance mode (no shadows, no anti-aliasing)' : 'Graphics: performance mode. Click for high quality'}
+          active={quality === 'low'}
+        >
+          <Gauge size={16} />
         </IconButton>
       </Panel>
 
@@ -124,7 +138,7 @@ export function TopBar() {
             },
           ]}
         />
-        <div className={`${mode === 'live' ? 'hidden' : 'hidden sm:flex'} items-center gap-1.5 rounded-lg bg-white/[0.04] px-2 py-1 font-mono text-[11px] text-slate-300 ring-1 ring-white/10`} title="City seed: the same seed rebuilds the same city">
+        <div className={`${mode === 'live' ? 'hidden' : 'hidden 2xl:flex'} items-center gap-1.5 rounded-lg bg-white/[0.04] px-2 py-1 font-mono text-[11px] text-slate-300 ring-1 ring-white/10`} title="City seed: the same seed rebuilds the same city">
           <span className="text-slate-500">seed</span> {sim.config.seed}
         </div>
         <IconButton onClick={() => newCity()} title="Generate a new city">

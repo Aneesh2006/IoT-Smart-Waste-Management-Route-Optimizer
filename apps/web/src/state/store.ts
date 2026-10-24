@@ -31,6 +31,11 @@ interface AppState {
   editorOpen: boolean;
   xrayOpen: boolean;
   impactOpen: boolean;
+  /** Presentation: slow camera orbit, panels hidden, scene index. */
+  orbit: boolean;
+  clean: boolean;
+  present: number | null;
+  quality: 'high' | 'low';
   heatmap: HeatMode;
   /** Time-lapse of the recorded tape; the scene draws the tape frame instead of the live sim. */
   replay: { index: number; playing: boolean } | null;
@@ -65,6 +70,8 @@ interface AppState {
   setEditorOpen(open: boolean): void;
   setXrayOpen(open: boolean): void;
   setImpactOpen(open: boolean): void;
+  closeOverlays(): void;
+  setQuality(q: 'high' | 'low', auto?: boolean): void;
   cycleHeatmap(): void;
   startReplay(): void;
   setReplay(r: { index: number; playing: boolean }): void;
@@ -144,6 +151,16 @@ export const useApp = create<AppState>((set, get) => ({
   editorOpen: false,
   xrayOpen: false,
   impactOpen: false,
+  orbit: false,
+  clean: false,
+  present: null,
+  quality: (() => {
+    try {
+      return window.localStorage.getItem('binsight.quality') === 'low' ? 'low' : 'high';
+    } catch {
+      return 'high';
+    }
+  })(),
   heatmap: 'off',
   replay: null,
   toast: null,
@@ -234,6 +251,16 @@ export const useApp = create<AppState>((set, get) => ({
   setReplay: (replay) => set({ replay }),
   exitReplay: () => set({ replay: null, paused: false }),
   cycleHeatmap: () => set((s) => ({ heatmap: HEAT_MODES[(HEAT_MODES.indexOf(s.heatmap) + 1) % HEAT_MODES.length] })),
+  setQuality: (quality, auto = false) => {
+    try {
+      window.localStorage.setItem('binsight.quality', quality);
+    } catch {
+      // not remembered; fine
+    }
+    set({ quality });
+    if (auto) get().showToast('Switched to performance mode for a smoother frame rate (gauge button to undo).');
+  },
+  closeOverlays: () => set({ compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false, xrayOpen: false, impactOpen: false }),
   setImpactOpen: (open) => set({ impactOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false, xrayOpen: false }),
   setXrayOpen: (open) => set({ xrayOpen: open, compareOpen: false, labOpen: false, guideOpen: false, editorOpen: false }),
   setEditorOpen: (open) => set({ editorOpen: open, compareOpen: false, labOpen: false, guideOpen: false }),

@@ -18,6 +18,22 @@ import { Ground } from './Ground.tsx';
 import { Roads } from './Roads.tsx';
 import { Trucks } from './Trucks.tsx';
 
+/** After a few seconds, drop to performance mode once if frames are slow (weak laptops, projectors). */
+function FpsWatchdog() {
+  const acc = useMemo(() => ({ t: 0, frames: 0, done: false }), []);
+  useFrame((_, dt) => {
+    if (acc.done) return;
+    acc.t += dt;
+    acc.frames++;
+    if (acc.t < 5) return;
+    acc.done = true;
+    const fps = acc.frames / acc.t;
+    const s = useApp.getState();
+    if (fps < 24 && s.quality === 'high') s.setQuality('low', true);
+  });
+  return null;
+}
+
 /** Advances the simulation every frame and nudges the HUD ~6 times a second. */
 function SimDriver() {
   const acc = useMemo(() => ({ t: 0 }), []);
@@ -40,9 +56,16 @@ function CameraRig() {
   const controls = useThree((s) => s.controls) as unknown as Controls | null;
   const camera = useThree((s) => s.camera);
   const offset = useMemo(() => new Vector3(), []);
+  const up = useMemo(() => new Vector3(0, 1, 0), []);
   useFrame((_, dt) => {
     if (!controls) return;
-    const { focus, followTruck, sim, clearFocus } = useApp.getState();
+    const { focus, followTruck, sim, clearFocus, orbit } = useApp.getState();
+    // Cinematic mode: drift slowly around whatever we're looking at.
+    if (orbit) {
+      offset.copy(camera.position).sub(controls.target).applyAxisAngle(up, Math.min(dt, 0.1) * 0.06);
+      camera.position.copy(controls.target).add(offset);
+      controls.update();
+    }
     const target = followTruck !== null ? sim.trucks[followTruck] : focus;
     if (!target) return;
     const k = 1 - Math.exp(-dt * 3.5);
@@ -92,13 +115,15 @@ function World() {
 
 export function CityCanvas() {
   const sim = useApp((s) => s.sim);
+  const quality = useApp((s) => s.quality);
+  const high = quality === 'high';
   const { x0, x1, z0, z1 } = sim.city.bounds;
   const cx = (x0 + x1) / 2;
   const cz = (z0 + z1) / 2;
   return (
     <Canvas
-      shadows="percentage"
-      dpr={[1, 2]}
+      shadows={high ? 'percentage' : false}
+      dpr={high ? [1, 2] : 1}
       camera={{ position: [cx - 650, 950, cz + 1250], fov: 38, near: 5, far: 12000 }}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
       onPointerMissed={() => {
@@ -111,6 +136,7 @@ export function CityCanvas() {
         <World />
         <SimDriver />
         <CameraRig />
+        <FpsWatchdog />
         <LabelProjector />
         <MapControls
           makeDefault
@@ -122,7 +148,7 @@ export function CityCanvas() {
           maxDistance={3200}
           screenSpacePanning={false}
         />
-        <EffectComposer multisampling={4}>
+        <EffectComposer key={quality} multisampling={high ? 4 : 0}>
           <Bloom mipmapBlur luminanceThreshold={1} luminanceSmoothing={0.2} intensity={0.85} radius={0.72} />
           <Vignette eskil={false} offset={0.22} darkness={0.55} />
           <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />

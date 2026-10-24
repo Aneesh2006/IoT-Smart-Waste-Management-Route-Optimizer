@@ -145,6 +145,21 @@ export function GuideModal() {
                 <K>L</K> algorithm lab
               </span>
               <span>
+                <K>X</K> cloud X-Ray
+              </span>
+              <span>
+                <K>G</K> heatmap
+              </span>
+              <span>
+                <K>R</K> replay
+              </span>
+              <span>
+                <K>I</K> impact
+              </span>
+              <span>
+                <K>P</K> present (→ / ← / Esc)
+              </span>
+              <span>
                 <K>?</K> this guide
               </span>
               <span>
