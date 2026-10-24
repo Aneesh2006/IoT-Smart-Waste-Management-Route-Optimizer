@@ -27,6 +27,8 @@ export interface SimConfig {
   events: ChaosEvent[];
   /** Policy switches at sim times (Live mode replays these from scratch). */
   policyChanges: { at: number; policy: PolicyId }[];
+  /** Bin capacity upgrades from the capacity planner, litres by bin id. */
+  capacityOverrides: Record<number, number>;
 }
 
 export type ChaosKind = 'festival' | 'flood' | 'breakdown' | 'sensors' | 'fire';
@@ -63,6 +65,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   startHour: 5,
   events: [],
   policyChanges: [],
+  capacityOverrides: {},
 };
 
 /** Assumptions behind every rupee and kilogram on screen; keep them in one place. */
@@ -158,6 +161,8 @@ export interface TruckState {
   binsToday: number;
   /** When a broken-down truck is back in service. */
   brokenUntil: number;
+  /** Status changes over time, for the fleet timeline. */
+  log: { t: number; s: TruckStatus }[];
 }
 
 export interface Metrics {
@@ -269,6 +274,11 @@ export class Simulation {
     this.config = { ...DEFAULT_CONFIG, ...given };
     this.config.shifts = this.config.shifts.map((s) => ({ ...s }));
     this.city = city ?? generateCity({ seed: this.config.seed, bins: this.config.bins });
+    this.config.capacityOverrides = { ...this.config.capacityOverrides };
+    for (const [id, litres] of Object.entries(this.config.capacityOverrides)) {
+      const site = this.city.bins[Number(id)];
+      if (site) site.capacityL = litres;
+    }
     this.table = new DistanceTable(this.city);
     const rng = createRng(this.config.seed);
     this.rFill = rng.fork('fill');
@@ -328,6 +338,7 @@ export class Simulation {
       busySeconds: 0,
       binsToday: 0,
       brokenUntil: 0,
+      log: [{ t: this.time, s: 'idle' as TruckStatus }],
     }));
     this.snapshot();
     this.log('info', `City "${this.config.seed}" online: ${this.bins.length} smart bins, ${this.trucks.length} trucks.`);
@@ -415,6 +426,13 @@ export class Simulation {
     this.updateBins(t0, h);
     for (const truck of this.trucks) this.moveTruck(truck, h);
     this.time = t1;
+    for (const truck of this.trucks) {
+      const last = truck.log[truck.log.length - 1];
+      if (last.s !== truck.status) {
+        truck.log.push({ t: t1, s: truck.status });
+        if (truck.log.length > 3000) truck.log.shift();
+      }
+    }
 
     if (Math.floor(t1 / SAMPLE_SECONDS) !== Math.floor(t0 / SAMPLE_SECONDS)) {
       this.sampleSensors();

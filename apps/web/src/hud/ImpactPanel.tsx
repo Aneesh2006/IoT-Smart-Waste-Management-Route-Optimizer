@@ -1,9 +1,12 @@
 import { PROCESSING, type DistrictKind, type Metrics, type Simulation } from '@binsight/core';
 import { Leaf, X } from 'lucide-react';
+import { useState } from 'react';
 import { DISTRICT_COLORS, DISTRICT_LABEL, STREAM_COLORS } from '../lib/colors.ts';
 import { fmtInt } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
-import { IconButton, Panel } from './ui.tsx';
+import { CapacityPlanner } from './CapacityPlanner.tsx';
+import { FleetTimeline } from './FleetTimeline.tsx';
+import { IconButton, Panel, Segmented } from './ui.tsx';
 
 type NodeId = string;
 interface SNode {
@@ -130,6 +133,7 @@ export function ImpactPanel() {
 }
 
 function Impact({ sim }: { sim: Simulation }) {
+  const [tab, setTab] = useState<'flow' | 'fleet' | 'plan'>('flow');
   const m = sim.metrics;
   const f = flows(m);
   const tonnes = (l: number) => (l * PROCESSING.densityKgPerL) / 1000;
@@ -157,13 +161,41 @@ function Impact({ sim }: { sim: Simulation }) {
               <div className="eyebrow flex items-center gap-1.5">
                 <Leaf size={12} /> Impact
               </div>
-              <h2 className="text-xl font-bold">Where the city’s waste goes</h2>
-              <p className="mt-0.5 text-[12px] text-slate-400">Everything the trucks have collected since the start, {days < 1 ? `${Math.round(days * 24)} hours` : `${days.toFixed(1)} days`} of city time.</p>
+              <h2 className="text-xl font-bold">{tab === 'flow' ? 'Where the city’s waste goes' : tab === 'fleet' ? 'What the fleet did today' : 'Where to add bin capacity'}</h2>
+              <p className="mt-0.5 text-[12px] text-slate-400">
+                {tab === 'plan'
+                  ? 'Bigger bins where they overflow most, tested on a seeded week before you build anything.'
+                  : `Since the start: ${days < 1 ? `${Math.round(days * 24)} hours` : `${days.toFixed(1)} days`} of city time.`}
+              </p>
             </div>
-            <IconButton onClick={close} title="Close (Esc)">
-              <X size={15} />
-            </IconButton>
+            <div className="flex items-center gap-2">
+              <Segmented
+                size="sm"
+                value={tab}
+                onChange={setTab}
+                options={[
+                  { value: 'flow', label: 'Waste flow' },
+                  { value: 'fleet', label: 'Fleet day' },
+                  { value: 'plan', label: 'Capacity planner' },
+                ]}
+              />
+              <IconButton onClick={close} title="Close (Esc)">
+                <X size={15} />
+              </IconButton>
+            </div>
           </div>
+          {tab === 'fleet' && (
+            <div className="px-5 py-4">
+              <FleetTimeline sim={sim} />
+            </div>
+          )}
+          {tab === 'plan' && (
+            <div className="px-5 py-4">
+              <CapacityPlanner sim={sim} />
+            </div>
+          )}
+          {tab === 'flow' && (
+          <>
           <div className="grid grid-cols-2 gap-2 px-5 pt-4 md:grid-cols-4">
             {[
               ['Collected', `${tonnes(collected).toFixed(1)} t`, `${fmtInt(collected)} L`],
@@ -212,6 +244,8 @@ function Impact({ sim }: { sim: Simulation }) {
               {Math.round(PROCESSING.dryToRecycling * 100)}% of dry waste recovered at the recycling centre; the rest is landfilled. Teaching numbers, set in one place.
             </p>
           </div>
+          </>
+          )}
         </div>
       </Panel>
     </div>

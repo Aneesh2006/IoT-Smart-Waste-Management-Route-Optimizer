@@ -149,6 +149,10 @@ export class LiveWorld extends Simulation {
     for (const n of f.trucks) {
       const t = this.trucks[n.id];
       if (!t) continue;
+      if (t.status !== n.st) {
+        t.log.push({ t: f.simT, s: n.st });
+        if (t.log.length > 3000) t.log.shift();
+      }
       t.status = n.st;
       t.load = n.load;
       if (n.si !== undefined) t.stopIndex = n.si;
