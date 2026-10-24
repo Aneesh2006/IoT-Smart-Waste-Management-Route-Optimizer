@@ -1,11 +1,13 @@
 import { PROFILES, type Simulation } from '@binsight/core';
 import { Battery, Crosshair, Flame, Thermometer, Truck, Wind, X } from 'lucide-react';
+import { useState } from 'react';
 import { DISTRICT_LABEL, STREAM_COLORS, TRUCK_COLORS, fillCss } from '../lib/colors.ts';
 import { fmtAgo, fmtHours, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
+import { BinAnatomy, BinMqtt } from './BinInternals.tsx';
 import { JoinCard } from './JoinCard.tsx';
 import { Sparkline } from './Sparkline.tsx';
-import { Bar, IconButton, Panel, Section } from './ui.tsx';
+import { Bar, IconButton, Panel, Section, Segmented } from './ui.tsx';
 
 const STATUS_LABEL = {
   idle: 'At depot',
@@ -32,6 +34,7 @@ function BinCard({ sim, id }: { sim: Simulation; id: number }) {
   const site = sim.city.bins[id];
   const st = sim.bins[id];
   const { selectBin } = useApp.getState();
+  const [tab, setTab] = useState<'status' | 'inside' | 'wire'>('status');
   const ttf = sim.hoursToFull(id);
   const prior = PROFILES[site.district].hourly;
   const learned = Array.from(st.rate);
@@ -66,6 +69,22 @@ function BinCard({ sim, id }: { sim: Simulation; id: number }) {
         </div>
       </div>
 
+      <div className="px-4 pt-3">
+        <Segmented
+          size="sm"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'status', label: 'Status' },
+            { value: 'inside', label: 'Inside' },
+            { value: 'wire', label: 'MQTT' },
+          ]}
+        />
+      </div>
+      {tab === 'inside' && <BinAnatomy site={site} st={st} />}
+      {tab === 'wire' && <BinMqtt site={site} st={st} city={useApp.getState().liveControl?.city ?? 'demo'} />}
+      {tab === 'status' && (
+      <>
       <Section title="Ultrasonic level">
         <div className="flex items-end gap-4">
           <div className="relative h-24 w-14 overflow-hidden rounded-b-xl rounded-t-md bg-white/[0.04] ring-1 ring-white/15">
@@ -131,6 +150,8 @@ function BinCard({ sim, id }: { sim: Simulation; id: number }) {
           Teal bars are learned from this bin’s own readings; grey is the {DISTRICT_LABEL[site.district].toLowerCase()} prior it started from.
         </p>
       </Section>
+      </>
+      )}
     </>
   );
 }
