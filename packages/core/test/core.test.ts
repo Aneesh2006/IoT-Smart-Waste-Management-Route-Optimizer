@@ -205,3 +205,26 @@ describe('sigv4 presign for IoT websockets', () => {
     expect(ours.search.indexOf('X-Amz-Security-Token')).toBeGreaterThan(ours.search.indexOf('X-Amz-Signature'));
   });
 });
+
+describe('decision explainer', () => {
+  it('every bin it says will be collected is in the next plan', async () => {
+    const { explainBin } = await import('../src/explain.ts');
+    for (const policy of ['fixed', 'threshold', 'predictive'] as const) {
+      const sim = new Simulation({ seed: 'explain', policy });
+      sim.advance(3600 * 24); // Tue 05:00: next shift is the 06:00 morning round
+      // Sample right before the shift so readings match what the planner will see.
+      sim.advance(sim.nextShiftStart() - sim.time - 60);
+      // Skip near-ties: the sensor takes a fresh (noisy) reading at the moment the shift is planned.
+      const promised = sim.bins
+        .filter((b) => {
+          const v = explainBin(sim, b.id);
+          return b.assigned === -1 && v.verdict === 'collect' && (v.value === undefined || Math.abs(v.value - v.limit!) > 0.04);
+        })
+        .map((b) => b.id);
+      expect(promised.length).toBeGreaterThan(0);
+      sim.advance(120);
+      const planned = new Set(sim.lastPlan!.binIds);
+      for (const id of promised) expect(planned.has(id), `${policy} bin ${id}`).toBe(true);
+    }
+  });
+});

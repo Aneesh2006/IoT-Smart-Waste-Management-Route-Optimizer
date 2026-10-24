@@ -44,6 +44,7 @@ export function SceneLabels() {
         );
       })}
       {hovered !== null && hovered < sim.bins.length && <HoverTip id={hovered} />}
+      {selectedTruck !== null && <StopMarkers truckId={selectedTruck} />}
       {sim instanceof LiveWorld &&
         [...sim.phones.values()].map((p) => (
           <div
@@ -95,5 +96,31 @@ function HoverTip({ id }: { id: number }) {
         {DISTRICT_LABEL[site.district]} · {site.stream === 'wet' ? 'Wet' : 'Dry'} · {site.capacityL} L
       </div>
     </div>
+  );
+}
+
+/** The selected truck's next bins, numbered in visiting order. */
+function StopMarkers({ truckId }: { truckId: number }) {
+  const sim = useApp((s) => s.sim);
+  const t = sim.trucks[truckId];
+  if (!t?.route) return null;
+  const color = TRUCK_COLORS[truckId % TRUCK_COLORS.length];
+  const upcoming = t.route.stops.slice(t.stopIndex).filter((s) => s.binId !== undefined && s.kind === 'bin').slice(0, 15);
+  return (
+    <>
+      {upcoming.map((s, k) => {
+        const site = sim.city.bins[s.binId!];
+        return (
+          <div
+            key={`${truckId}-${s.binId}`}
+            ref={anchor(`stop-${truckId}-${s.binId}`, () => [site.x, BIN_HEIGHT + 6, site.z])}
+            className="absolute left-0 top-0 grid size-5 place-items-center rounded-full font-mono text-[10px] font-bold text-ink shadow"
+            style={{ ...HIDDEN, background: color, boxShadow: `0 0 10px ${color}` }}
+          >
+            {k + 1}
+          </div>
+        );
+      })}
+    </>
   );
 }

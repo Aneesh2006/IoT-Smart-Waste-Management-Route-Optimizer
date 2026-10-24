@@ -1,4 +1,4 @@
-import { PROFILES, type Simulation } from '@binsight/core';
+import { PROFILES, explainBin, type Simulation } from '@binsight/core';
 import { Battery, Crosshair, Flame, Smartphone, Thermometer, Truck, Wind, X } from 'lucide-react';
 import { useState } from 'react';
 import { DISTRICT_LABEL, STREAM_COLORS, TRUCK_COLORS, fillCss } from '../lib/colors.ts';
@@ -85,6 +85,7 @@ function BinCard({ sim, id }: { sim: Simulation; id: number }) {
       {tab === 'wire' && <BinMqtt site={site} st={st} city={useApp.getState().liveControl?.city ?? 'demo'} />}
       {tab === 'status' && (
       <>
+      <Decision sim={sim} id={id} />
       <Section title="Ultrasonic level">
         <div className="flex items-end gap-4">
           <div className="relative h-24 w-14 overflow-hidden rounded-b-xl rounded-t-md bg-white/[0.04] ring-1 ring-white/15">
@@ -153,6 +154,19 @@ function BinCard({ sim, id }: { sim: Simulation; id: number }) {
       </>
       )}
     </>
+  );
+}
+
+function Decision({ sim, id }: { sim: Simulation; id: number }) {
+  const v = explainBin(sim, id);
+  const tone =
+    v.verdict === 'collect' ? 'bg-emerald-400/10 ring-emerald-400/30 text-emerald-200' : v.verdict === 'enroute' ? 'bg-sky-400/10 ring-sky-400/30 text-sky-200' : 'bg-white/[0.04] ring-white/10 text-slate-200';
+  return (
+    <div className={`mx-4 mt-3 rounded-xl px-3 py-2 ring-1 ${tone}`}>
+      <div className="text-[10px] uppercase tracking-wider opacity-70">Next decision · {sim.policy.short}</div>
+      <div className="text-[13px] font-semibold">{v.headline}</div>
+      <div className="mt-0.5 text-[11px] leading-snug text-slate-400">{v.detail}</div>
+    </div>
   );
 }
 

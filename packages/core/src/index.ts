@@ -9,5 +9,6 @@ export * from './compare.ts';
 export * from './lab.ts';
 export * from './live.ts';
 export * from './sigv4.ts';
+export * from './explain.ts';
 export * from './routing/tsp.ts';
 export * from './routing/cvrp.ts';
