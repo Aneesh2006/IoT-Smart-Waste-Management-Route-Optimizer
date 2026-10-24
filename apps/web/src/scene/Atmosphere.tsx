@@ -2,6 +2,8 @@ import { DAY, HOUR } from '@binsight/core';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import { Color, Fog, type DirectionalLight, type HemisphereLight } from 'three';
+
+const STORM = new Color('#3b4655');
 import { useApp } from '../state/store.ts';
 import { lightingAt } from './sky.ts';
 
@@ -39,6 +41,8 @@ export function Atmosphere({ center }: { center: { x: number; z: number } }) {
     const time = replay ? (sim.tape[replay.index]?.time ?? sim.time) : sim.time;
     const hour = (time % DAY) / HOUR;
     lightingAt(hour, light);
+    // Overcast while a flood (monsoon) is on.
+    if (sim.closures.length > 0) light.sky.lerp(STORM, 0.55 * light.daylight + 0.2);
     if (scene.background instanceof Color) scene.background.copy(light.sky);
     if (scene.fog) scene.fog.color.copy(light.sky);
     nightUniform.value = light.night;

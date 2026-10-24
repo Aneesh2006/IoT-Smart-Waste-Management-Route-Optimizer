@@ -163,6 +163,7 @@ export class LiveWorld extends Simulation {
     this.config.policy = f.policy;
     if (f.metrics) this.metrics = f.metrics;
     this.fires = new Map(f.fires.map((id) => [id, Infinity]));
+    this.festivalUntil = f.festival ? f.simT + 3600 : 0;
 
     const key = f.closed.join(',');
     if (key !== this.closedKey) {

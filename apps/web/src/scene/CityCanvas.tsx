@@ -14,6 +14,7 @@ import { CameraProbe } from './cameraProbe.tsx';
 import { Hazards } from './Hazards.tsx';
 import { Heatmap } from './Heatmap.tsx';
 import { PhoneBins } from './PhoneBins.tsx';
+import { Weather } from './Weather.tsx';
 import { LabelProjector } from './Labels.tsx';
 import { Ground } from './Ground.tsx';
 import { Roads } from './Roads.tsx';
@@ -109,6 +110,7 @@ function World() {
       <Bins city={city} />
       <Hazards city={city} />
       <PhoneBins />
+      <Weather city={city} />
       <Trucks />
     </group>
   );

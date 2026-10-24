@@ -102,6 +102,7 @@ export interface FleetFrame {
   trucks: TruckFrame[];
   fires: number[];
   closed: number[];
+  festival?: boolean;
   routeVersion: number;
   metrics?: Metrics;
 }

@@ -123,6 +123,7 @@ export const handler = async (_event: unknown, context: Context) => {
       trucks: sim.trucks.map((t) => ({ id: t.id, x: round(t.x), z: round(t.z), h: Math.round(t.heading * 100) / 100, st: t.status, load: Math.round(t.load) })),
       fires: [...sim.fires.keys()],
       closed: sim.closures.flatMap((c) => c.edges),
+      festival: sim.festivalUntil > sim.time,
       routeVersion: sim.routeVersion,
       metrics: frame % 4 === 0 ? sim.metrics : undefined,
     };

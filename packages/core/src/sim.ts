@@ -253,6 +253,8 @@ export class Simulation {
   /** Burning bins and when they burn out. */
   fires = new Map<number, number>();
   closures: { edges: number[]; until: number; name: string }[] = [];
+  /** Sim time a festival ends (0 when none is on), for the renderer. */
+  festivalUntil = 0;
   private boosts: { district: DistrictKind; factor: number; until: number }[] = [];
   private sensorRepairs: { bins: number[]; at: number }[] = [];
   private pending: ChaosEvent[];
@@ -766,6 +768,7 @@ export class Simulation {
     switch (kind) {
       case 'festival': {
         this.boosts.push({ district: 'market', factor: 3.2, until: this.time + 10 * HOUR });
+        this.festivalUntil = this.time + 10 * HOUR;
         this.boosts.push({ district: 'park', factor: 2, until: this.time + 10 * HOUR });
         this.log('alert', 'Festival night: market waste ×3 and parks ×2 for 10 hours. The forecaster has never seen this.');
         break;
