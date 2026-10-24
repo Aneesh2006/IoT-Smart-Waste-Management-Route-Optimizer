@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { BottomBar } from './hud/BottomBar.tsx';
+import { ComparePanel } from './hud/ComparePanel.tsx';
 import { Inspector } from './hud/Inspector.tsx';
 import { OpsPanel } from './hud/OpsPanel.tsx';
 import { TopBar } from './hud/TopBar.tsx';
@@ -15,8 +16,11 @@ function useHotkeys() {
         e.preventDefault();
         s.togglePause();
       } else if (e.key === 'Escape') {
+        if (s.compareOpen) return s.setCompareOpen(false);
         s.selectBin(null);
         s.selectTruck(null);
+      } else if (e.key === 'c') {
+        s.setCompareOpen(!s.compareOpen);
       } else if (/^[1-5]$/.test(e.key)) {
         s.setSpeed(SPEEDS[Number(e.key) - 1]);
       } else if (e.key === 'n') {
@@ -44,6 +48,7 @@ export function App() {
         <Inspector />
       </div>
       <BottomBar />
+      <ComparePanel />
     </div>
   );
 }

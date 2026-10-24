@@ -1,5 +1,5 @@
 import { COSTS, POLICIES, POLICY_ORDER, type Construction } from '@binsight/core';
-import { Route, Zap } from 'lucide-react';
+import { Route, Scale, Zap } from 'lucide-react';
 import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
@@ -116,6 +116,13 @@ export function OpsPanel() {
           className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-400 to-lime-400 px-3 py-2 text-[13px] font-semibold text-ink shadow-[0_0_24px_rgb(94_234_212/0.35)] transition hover:brightness-110"
         >
           <Zap size={15} /> Plan routes now
+        </button>
+        <button
+          onClick={() => useApp.getState().setCompareOpen(true)}
+          className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-xl bg-white/[0.04] px-3 py-2 text-[12.5px] font-medium text-slate-200 ring-1 ring-white/10 transition hover:bg-white/[0.08]"
+          title="Run every policy over the same seeded week (C)"
+        >
+          <Scale size={14} /> Compare all policies
         </button>
       </Section>
 

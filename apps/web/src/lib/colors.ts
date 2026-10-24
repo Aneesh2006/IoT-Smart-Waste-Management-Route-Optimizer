@@ -1,5 +1,5 @@
 import { Color } from 'three';
-import type { DistrictKind, WasteStream } from '@binsight/core';
+import type { DistrictKind, PolicyId, WasteStream } from '@binsight/core';
 
 export const TRUCK_COLORS = ['#22d3ee', '#f472b6', '#facc15', '#a78bfa', '#fb923c', '#4ade80', '#60a5fa', '#f87171'];
 
@@ -63,4 +63,11 @@ export const BAND_META: Record<FillBand, { label: string; color: string }> = {
   filling: { label: 'Filling', color: '#facc15' },
   critical: { label: 'Critical', color: '#f97316' },
   overflow: { label: 'Overflowing', color: '#ef4444' },
+};
+
+export const POLICY_COLORS: Record<PolicyId, string> = {
+  fixed: '#94a3b8',
+  threshold: '#fbbf24',
+  predictive: '#5eead4',
+  dynamic: '#a78bfa',
 };

@@ -198,7 +198,9 @@ export class Simulation {
   private rSensor: Rng;
 
   constructor(config: Partial<SimConfig> = {}, city?: City) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    const given = Object.fromEntries(Object.entries(config).filter(([, v]) => v !== undefined)) as Partial<SimConfig>;
+    this.config = { ...DEFAULT_CONFIG, ...given };
+    this.config.shifts = this.config.shifts.map((s) => ({ ...s }));
     this.city = city ?? generateCity({ seed: this.config.seed, bins: this.config.bins });
     this.table = new DistanceTable(this.city);
     const rng = createRng(this.config.seed);
@@ -345,7 +347,38 @@ export class Simulation {
       const b = a + h;
       if (a < start && b >= start) this.planShift(k);
     }
-    if (Math.floor(t1 / HOUR) !== Math.floor(t0 / HOUR)) this.snapshot();
+    if (Math.floor(t1 / HOUR) !== Math.floor(t0 / HOUR)) {
+      this.snapshot();
+      this.maybeReplan();
+    }
+  }
+
+  /** Mid-shift re-planning for policies that support it (Dynamic). */
+  private maybeReplan() {
+    const policy = this.policy;
+    const shift = this.shiftAt();
+    if (!policy.replan || shift === -1) return;
+    // The shift-start plan has just been made; don't second-guess it in the same hour.
+    if ((this.time % DAY) / HOUR - this.config.shifts[shift].start < 0.5) return;
+    if (!this.trucks.some((t) => t.status === 'idle')) return;
+    const ids = policy.replan(this.policyContext(shift));
+    if (ids.length === 0) return;
+    this.plan(shift, ids, 'Re-plan');
+  }
+
+  private policyContext(shift: number): PolicyContext {
+    const window = this.config.shifts[shift];
+    return {
+      time: this.time,
+      shift,
+      nextShiftStart: this.nextShiftStart(),
+      shiftHours: window.end - window.start,
+      sites: this.city.bins,
+      bins: this.bins.filter((b) => b.assigned === -1),
+      threshold: this.config.threshold,
+      forecast: (id, at) => this.forecast(id, at),
+      distance: (a, b) => this.table.distance(this.city.bins[a].node, this.city.bins[b].node),
+    };
   }
 
   private updateBins(t0: number, h: number) {
@@ -398,25 +431,16 @@ export class Simulation {
   }
 
   private planShift(shift: number) {
-    const idle = this.trucks.filter((t) => t.status === 'idle');
-    if (idle.length === 0) {
+    if (!this.trucks.some((t) => t.status === 'idle')) {
       this.log('warn', 'Shift start: every truck is still out, nothing planned.');
       return;
     }
+    this.plan(shift, this.policy.select(this.policyContext(shift)), 'shift');
+  }
+
+  private plan(shift: number, binIds: number[], label: string) {
+    const idle = this.trucks.filter((t) => t.status === 'idle');
     const policy = this.policy;
-    const shiftWindow = this.config.shifts[shift];
-    const ctx: PolicyContext = {
-      time: this.time,
-      shift,
-      nextShiftStart: this.nextShiftStart(),
-      shiftHours: shiftWindow.end - shiftWindow.start,
-      sites: this.city.bins,
-      bins: this.bins.filter((b) => b.assigned === -1),
-      threshold: this.config.threshold,
-      forecast: (id, at) => this.forecast(id, at),
-      distance: (a, b) => this.table.distance(this.city.bins[a].node, this.city.bins[b].node),
-    };
-    const binIds = policy.select(ctx);
     const stops: VrpStop[] = binIds.map((id) => {
       const site = this.city.bins[id];
       const expected = policy.id === 'fixed' ? 0.6 : Math.min(1.2, Math.max(this.bins[id].reading, this.forecast(id, this.time + 2 * HOUR)));
@@ -443,11 +467,12 @@ export class Simulation {
     this.lastPlan = { time: this.time, shift, policy: policy.id, binIds, solution };
     this.routeVersion++;
     const used = solution.trucks.filter((t) => t.trips.length > 0).length;
+    const when = `${formatClock(this.time)} ${label}`;
     this.log(
       'plan',
       binIds.length === 0
-        ? `${formatClock(this.time)} shift: ${policy.short} policy found nothing worth collecting.`
-        : `${formatClock(this.time)} shift: ${policy.short} picked ${binIds.length} bins → ${used} trucks, ${solution.tripCount} trips, ${(solution.totalLength / 1000).toFixed(1)} km planned in ${solution.ms.toFixed(0)} ms.`,
+        ? `${when}: ${policy.short} policy found nothing worth collecting.`
+        : `${when}: ${policy.short} picked ${binIds.length} bins → ${used} trucks, ${solution.tripCount} trips, ${(solution.totalLength / 1000).toFixed(1)} km planned in ${solution.ms.toFixed(0)} ms.`,
     );
   }
 
