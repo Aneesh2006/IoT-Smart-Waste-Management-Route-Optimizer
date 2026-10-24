@@ -105,6 +105,8 @@ export interface BinState {
   sensorOk: boolean;
   /** Learned fill rate per hour of day, fraction of capacity per hour. */
   rate: Float32Array;
+  /** The same, learned separately for Saturdays and Sundays. */
+  rateWeekend: Float32Array;
   /** Sensor readings, one per sample, oldest first. */
   history: number[];
   overflowing: boolean;
@@ -236,6 +238,11 @@ export interface ShiftPlan {
   solution: VrpSolution;
 }
 
+const isWeekend = (t: number) => Math.floor(t / DAY) % 7 >= 5;
+
+/** A bin's learned fill rate at time t (weekday or weekend rhythm). */
+const rateAt = (b: BinState, t: number) => (isWeekend(t) ? b.rateWeekend : b.rate)[Math.floor((t % DAY) / HOUR)];
+
 const emptyMetrics = (): Metrics => ({
   distanceM: 0,
   fuelL: 0,
@@ -313,7 +320,11 @@ export class Simulation {
     this.bins = this.city.bins.map((site) => {
       const start = Math.min(0.85, Math.max(0.02, rInit.range(0.05, 0.55) * (site.district === 'market' ? 1.4 : 1)));
       const rate = new Float32Array(24);
-      for (let h = 0; h < 24; h++) rate[h] = profileRate(site.district, h * HOUR);
+      const rateWeekend = new Float32Array(24);
+      for (let h = 0; h < 24; h++) {
+        rate[h] = profileRate(site.district, h * HOUR);
+        rateWeekend[h] = profileRate(site.district, 5 * DAY + h * HOUR);
+      }
       return {
         id: site.id,
         fill: start,
@@ -324,6 +335,7 @@ export class Simulation {
         battery: rInit.range(55, 100),
         sensorOk: true,
         rate,
+        rateWeekend,
         history: [start],
         overflowing: false,
         lastCollectedAt: this.time - rInit.range(6, 30) * HOUR,
@@ -410,7 +422,7 @@ export class Simulation {
     while (t < at) {
       const hourEnd = (Math.floor(t / HOUR) + 1) * HOUR;
       const step = Math.min(hourEnd, at) - t;
-      f += (b.rate[Math.floor((t % DAY) / HOUR)] * step) / HOUR;
+      f += (rateAt(b, t) * step) / HOUR;
       t += step;
     }
     return f;
@@ -424,7 +436,7 @@ export class Simulation {
     let t = b.readingAt;
     const limit = t + 72 * HOUR;
     while (t < limit) {
-      const r = b.rate[Math.floor((t % DAY) / HOUR)];
+      const r = rateAt(b, t);
       const hourEnd = (Math.floor(t / HOUR) + 1) * HOUR;
       const step = hourEnd - t;
       const gain = (r * step) / HOUR;
@@ -551,7 +563,8 @@ export class Simulation {
         if (!b.collectedThisHour) {
           const prevHour = (hourOfDay + 23) % 24;
           const observed = Math.max(0, reading - b.hourStartReading);
-          b.rate[prevHour] = b.rate[prevHour] * 0.65 + observed * 0.35;
+          const rates = isWeekend(this.time - HOUR) ? b.rateWeekend : b.rate;
+          rates[prevHour] = rates[prevHour] * 0.65 + observed * 0.35;
         }
         b.hourStartReading = reading;
         b.collectedThisHour = false;
