@@ -228,3 +228,26 @@ describe('decision explainer', () => {
     }
   });
 });
+
+describe('assumptions', () => {
+  it('prices in the config drive the bill, and do not leak between runs', async () => {
+    const { COSTS, runPolicy } = await import('../src/index.ts');
+    const base = runPolicy({ seed: 'costs' }, 'fixed', 2).metrics;
+    const pricey = runPolicy({ seed: 'costs', costs: { ...COSTS, dieselInrPerL: COSTS.dieselInrPerL * 2 } }, 'fixed', 2).metrics;
+    const again = runPolicy({ seed: 'costs' }, 'fixed', 2).metrics;
+    expect(pricey.distanceM).toBeCloseTo(base.distanceM, 6);
+    expect(pricey.costInr - base.costInr).toBeCloseTo(base.fuelL * COSTS.dieselInrPerL, 3);
+    expect(again.costInr).toBeCloseTo(base.costInr, 6);
+  });
+
+  it('capacity upgrades reduce litter on the same seed', async () => {
+    const { runPolicy, Simulation } = await import('../src/index.ts');
+    const probe = new Simulation({ seed: 'cap-up', policy: 'fixed' });
+    probe.advance(3 * 86400);
+    const worst = [...probe.bins].sort((a, b) => b.overflowHours - a.overflowHours).slice(0, 8);
+    const overrides = Object.fromEntries(worst.map((b) => [b.id, 2200]));
+    const before = runPolicy({ seed: 'cap-up' }, 'fixed', 3).metrics;
+    const after = runPolicy({ seed: 'cap-up', capacityOverrides: overrides }, 'fixed', 3).metrics;
+    expect(after.overflowBinHours).toBeLessThan(before.overflowBinHours);
+  });
+});

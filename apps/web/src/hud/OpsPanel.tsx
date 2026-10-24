@@ -1,4 +1,4 @@
-import { CHAOS_INFO, CHAOS_ORDER, COSTS, POLICIES, policyOrder, type ChaosKind, type Construction } from '@binsight/core';
+import { CHAOS_INFO, CHAOS_ORDER, POLICIES, policyOrder, type ChaosKind, type Construction } from '@binsight/core';
 import { Code2, CloudRain, FileText, Leaf, FlaskConical, Flame, PartyPopper, Route, Scale, WifiOff, Wrench, Zap } from 'lucide-react';
 import { BAND_META, fillBand, type FillBand } from '../lib/colors.ts';
 import { fmtInr, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
@@ -66,7 +66,7 @@ export function OpsPanel() {
             label="Wasted visits"
             value={fmtPct(wastedShare, 1)}
             accent={wastedShare > 0.1 ? '#fbbf24' : '#a3e635'}
-            sub={`${fmtInt(m.wastedVisits)} of ${fmtInt(m.visits)} under ${fmtPct(COSTS.wastedBelow)}`}
+            sub={`${fmtInt(m.wastedVisits)} of ${fmtInt(m.visits)} under ${fmtPct(cfg.costs.wastedBelow)}`}
           />
           <Stat
             label="Overflow events"

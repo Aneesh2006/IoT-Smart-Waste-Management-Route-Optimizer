@@ -1,5 +1,4 @@
 import {
-  COSTS,
   EXACT_LIMIT,
   LAB_INFO,
   POLICIES,
@@ -26,6 +25,7 @@ const LAB_ALGS: LabAlgorithm[] = ['nearest', 'savings', 'twoopt', 'oropt', 'anne
 
 export function ReportView() {
   const sim = useApp((s) => s.sim);
+  const costs = sim.config.costs;
   const [rows, setRows] = useState<CompareRow[]>([]);
   const days = 7;
 
@@ -222,11 +222,11 @@ export function ReportView() {
         <h2 className="mt-6 text-xl font-bold">6. Assumptions</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-slate-700">
           <li>
-            Diesel ₹{COSTS.dieselInrPerL}/L at {COSTS.fuelLPerKm} L/km, {COSTS.co2KgPerL} kg CO₂ per litre, crew ₹{COSTS.crewInrPerHour}/hour, {COSTS.serviceSeconds} s per
-            bin and {Math.round(COSTS.unloadSeconds / 60)} min per tip.
+            Diesel ₹{costs.dieselInrPerL}/L at {costs.fuelLPerKm} L/km, {costs.co2KgPerL} kg CO₂ per litre, crew ₹{costs.crewInrPerHour}/hour, {costs.serviceSeconds} s per
+            bin and {Math.round(costs.unloadSeconds / 60)} min per tip.
           </li>
           <li>
-            Waste generation follows per-district hourly and weekly curves with per-bin variation and noise; a pickup under {Math.round(COSTS.wastedBelow * 100)}% full counts
+            Waste generation follows per-district hourly and weekly curves with per-bin variation and noise; a pickup under {Math.round(costs.wastedBelow * 100)}% full counts
             as wasted.
           </li>
           <li>

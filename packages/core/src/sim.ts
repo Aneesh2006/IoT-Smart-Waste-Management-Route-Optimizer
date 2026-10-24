@@ -29,6 +29,8 @@ export interface SimConfig {
   policyChanges: { at: number; policy: PolicyId }[];
   /** Bin capacity upgrades from the capacity planner, litres by bin id. */
   capacityOverrides: Record<number, number>;
+  /** Prices and timings behind every rupee, kilogram and minute (see COSTS). */
+  costs: Costs;
 }
 
 export type ChaosKind = 'festival' | 'flood' | 'breakdown' | 'sensors' | 'fire';
@@ -49,6 +51,20 @@ export const CHAOS_INFO: Record<ChaosKind, { name: string; question: string }> =
 
 export const CHAOS_ORDER: ChaosKind[] = ['festival', 'flood', 'breakdown', 'sensors', 'fire'];
 
+/** Assumptions behind every rupee and kilogram on screen; keep them in one place. */
+export const COSTS = {
+  dieselInrPerL: 92,
+  fuelLPerKm: 0.38,
+  co2KgPerL: 2.68,
+  crewInrPerHour: 450,
+  serviceSeconds: 75,
+  unloadSeconds: 480,
+  /** A pickup below this fill is counted as a wasted visit. */
+  wastedBelow: 0.3,
+};
+
+export type Costs = typeof COSTS;
+
 export const DEFAULT_CONFIG: SimConfig = {
   seed: 'binsight',
   bins: 120,
@@ -66,19 +82,9 @@ export const DEFAULT_CONFIG: SimConfig = {
   events: [],
   policyChanges: [],
   capacityOverrides: {},
+  costs: { ...COSTS },
 };
 
-/** Assumptions behind every rupee and kilogram on screen; keep them in one place. */
-export const COSTS = {
-  dieselInrPerL: 92,
-  fuelLPerKm: 0.38,
-  co2KgPerL: 2.68,
-  crewInrPerHour: 450,
-  serviceSeconds: 75,
-  unloadSeconds: 480,
-  /** A pickup below this fill is counted as a wasted visit. */
-  wastedBelow: 0.3,
-};
 
 /** What happens after the transfer station. Teaching assumptions, not measurements. */
 export const PROCESSING = {
@@ -273,6 +279,8 @@ export class Simulation {
   /** The latest bin pickups, newest last, for collection effects. */
   pickups: { id: number; binId: number; truckId: number; litres: number; time: number; wasted: boolean }[] = [];
   private pickupId = 0;
+  /** Original capacity ÷ current capacity per bin (1 unless upgraded). */
+  private sizeScale: number[];
   forecastStats: ForecastStats = { n: 0, mae: 0, priorMae: 0, byDay: [] };
   private pendingForecasts: { due: number; binId: number; predicted: number; prior: number; collections: number }[] = [];
   events: SimEvent[] = [];
@@ -301,9 +309,15 @@ export class Simulation {
     this.config.shifts = this.config.shifts.map((s) => ({ ...s }));
     this.city = city ?? generateCity({ seed: this.config.seed, bins: this.config.bins });
     this.config.capacityOverrides = { ...this.config.capacityOverrides };
+    this.config.costs = { ...COSTS, ...this.config.costs };
+    // Waste is produced in litres by the place, sized to the bin the city was built with;
+    // a bigger bin then fills proportionally slower.
+    this.sizeScale = this.city.bins.map(() => 1);
     for (const [id, litres] of Object.entries(this.config.capacityOverrides)) {
       const site = this.city.bins[Number(id)];
-      if (site) site.capacityL = litres;
+      if (!site) continue;
+      this.sizeScale[site.id] = site.capacityL / litres;
+      site.capacityL = litres;
     }
     this.table = new DistanceTable(this.city);
     const rng = createRng(this.config.seed);
@@ -322,8 +336,8 @@ export class Simulation {
       const rate = new Float32Array(24);
       const rateWeekend = new Float32Array(24);
       for (let h = 0; h < 24; h++) {
-        rate[h] = profileRate(site.district, h * HOUR);
-        rateWeekend[h] = profileRate(site.district, 5 * DAY + h * HOUR);
+        rate[h] = profileRate(site.district, h * HOUR) * this.sizeScale[site.id];
+        rateWeekend[h] = profileRate(site.district, 5 * DAY + h * HOUR) * this.sizeScale[site.id];
       }
       return {
         id: site.id,
@@ -519,7 +533,7 @@ export class Simulation {
     const sites = this.city.bins;
     for (const b of this.bins) {
       const site = sites[b.id];
-      let rate = profileRate(site.district, t0) * site.busyness * b.noise;
+      let rate = profileRate(site.district, t0) * site.busyness * b.noise * this.sizeScale[b.id];
       for (const boost of this.boosts) if (boost.district === site.district) rate *= boost.factor;
       b.fill += (rate * h) / HOUR;
       b.generatedL += ((rate * h) / HOUR) * site.capacityL;
@@ -596,8 +610,8 @@ export class Simulation {
         capacity: this.config.truckCapacityL,
         trucks: idle.length,
         dist: (a, b) => this.table.distance(a, b),
-        serviceSeconds: COSTS.serviceSeconds,
-        unloadSeconds: COSTS.unloadSeconds,
+        serviceSeconds: this.config.costs.serviceSeconds,
+        unloadSeconds: this.config.costs.unloadSeconds,
         avgSpeed: 8,
       },
       { construction: this.config.construction, improve: this.config.improve },
@@ -732,15 +746,15 @@ export class Simulation {
     this.placeTruck(t, route);
     const driven = t.odometer - startOdo;
     if (driven > 0) {
-      const fuel = (driven / 1000) * COSTS.fuelLPerKm;
+      const fuel = (driven / 1000) * this.config.costs.fuelLPerKm;
       this.metrics.distanceM += driven;
       this.metrics.fuelL += fuel;
-      this.metrics.co2Kg += fuel * COSTS.co2KgPerL;
-      this.metrics.costInr += fuel * COSTS.dieselInrPerL;
+      this.metrics.co2Kg += fuel * this.config.costs.co2KgPerL;
+      this.metrics.costInr += fuel * this.config.costs.dieselInrPerL;
     }
     const crewH = h / HOUR;
     this.metrics.crewHours += crewH;
-    this.metrics.costInr += crewH * COSTS.crewInrPerHour;
+    this.metrics.costInr += crewH * this.config.costs.crewInrPerHour;
   }
 
   private nextStop(t: TruckState) {
@@ -764,8 +778,8 @@ export class Simulation {
       const b = this.bins[stop.binId];
       const site = this.city.bins[stop.binId];
       const litres = Math.min(b.fill * site.capacityL, t.capacity - t.load);
-      if (b.fill < COSTS.wastedBelow) this.metrics.wastedVisits++;
-      this.pickups.push({ id: this.pickupId++, binId: b.id, truckId: t.id, litres, time: this.time, wasted: b.fill < COSTS.wastedBelow });
+      if (b.fill < this.config.costs.wastedBelow) this.metrics.wastedVisits++;
+      this.pickups.push({ id: this.pickupId++, binId: b.id, truckId: t.id, litres, time: this.time, wasted: b.fill < this.config.costs.wastedBelow });
       if (this.pickups.length > 40) this.pickups.shift();
       this.metrics.visits++;
       this.metrics.collectedL += litres;
@@ -781,7 +795,7 @@ export class Simulation {
       b.collectedThisHour = true;
       if (this.fires.delete(b.id)) this.log('info', `${site.label}: fire put out by ${t.name}'s crew.`, { binId: b.id });
       t.binsToday++;
-      t.serviceLeft = COSTS.serviceSeconds;
+      t.serviceLeft = this.config.costs.serviceSeconds;
       t.status = 'collecting';
     } else if (stop.kind === 'unload') {
       const wetShare = this.estimateWetShare(t);
@@ -789,7 +803,7 @@ export class Simulation {
       this.metrics.tippedDryL += t.load * (1 - wetShare);
       this.log('unload', `${t.name} tipped ${Math.round(t.load).toLocaleString('en-IN')} L at the transfer station.`, { truckId: t.id });
       t.load = 0;
-      t.serviceLeft = COSTS.unloadSeconds;
+      t.serviceLeft = this.config.costs.unloadSeconds;
       t.status = 'unloading';
     } else {
       t.route = null;
@@ -1036,7 +1050,7 @@ export class Simulation {
       if (!b.sensorOk) continue;
       const site = this.city.bins[b.id];
       let prior = b.reading;
-      for (let t = now; t < due; t += HOUR) prior += profileRate(site.district, t) * Math.min(1, (due - t) / HOUR);
+      for (let t = now; t < due; t += HOUR) prior += profileRate(site.district, t) * this.sizeScale[b.id] * Math.min(1, (due - t) / HOUR);
       this.pendingForecasts.push({ due, binId: b.id, predicted: this.forecast(b.id, due), prior, collections: b.collections });
     }
   }

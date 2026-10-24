@@ -1,4 +1,3 @@
-import { COSTS } from '@binsight/core';
 import { BookOpen, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp } from '../state/store.ts';
@@ -31,6 +30,7 @@ const K = ({ children }: { children: ReactNode }) => (
 
 export function GuideModal() {
   const open = useApp((s) => s.guideOpen);
+  const costs = useApp((s) => s.sim.config.costs);
   if (!open) return null;
   const close = () => useApp.getState().setGuideOpen(false);
   return (
@@ -84,7 +84,7 @@ export function GuideModal() {
             <Try
               items={[
                 <>
-                  <b>Collected ≠ efficient.</b> The wasted-visits meter counts pickups of bins under {Math.round(COSTS.wastedBelow * 100)}% full. Fixed schedules burn a lot of
+                  <b>Collected ≠ efficient.</b> The wasted-visits meter counts pickups of bins under {Math.round(costs.wastedBelow * 100)}% full. Fixed schedules burn a lot of
                   diesel on near-empty bins.
                 </>,
                 <>
@@ -152,8 +152,8 @@ export function GuideModal() {
 
             <H>Assumptions</H>
             <P>
-              Diesel ₹{COSTS.dieselInrPerL}/L at {COSTS.fuelLPerKm} L/km, {COSTS.co2KgPerL} kg CO₂ per litre, crew ₹{COSTS.crewInrPerHour}/h, {COSTS.serviceSeconds} s to empty a
-              bin and {Math.round(COSTS.unloadSeconds / 60)} min to tip at the transfer station. Waste generation follows per-district daily and weekly curves with noise. These
+              Diesel ₹{costs.dieselInrPerL}/L at {costs.fuelLPerKm} L/km, {costs.co2KgPerL} kg CO₂ per litre, crew ₹{costs.crewInrPerHour}/h, {costs.serviceSeconds} s to empty a
+              bin and {Math.round(costs.unloadSeconds / 60)} min to tip at the transfer station. Waste generation follows per-district daily and weekly curves with noise. These
               are teaching numbers, set in one file, not measurements.
             </P>
 

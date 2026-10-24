@@ -1,6 +1,7 @@
 import { ChevronDown, Hammer } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../state/store.ts';
+import { Assumptions } from './Assumptions.tsx';
 import { Section, Segmented } from './ui.tsx';
 
 const TWO_SHIFTS = [
@@ -84,6 +85,7 @@ export function CitySetup() {
             <Hammer size={13} /> Build this city
           </button>
           <p className="text-[10.5px] text-slate-500">Bigger cities get a bigger street grid. Compare and the Algorithm lab use these settings too.</p>
+          <Assumptions />
         </div>
       )}
     </Section>
