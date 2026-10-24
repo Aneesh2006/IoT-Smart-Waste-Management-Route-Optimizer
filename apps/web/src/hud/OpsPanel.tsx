@@ -75,6 +75,21 @@ export function OpsPanel() {
             sub={`${m.overflowBinHours.toFixed(0)} bin-hours of litter`}
           />
         </div>
+        {sim.forecastStats.n > 0 && (
+          <div className="mt-2 rounded-xl bg-white/[0.03] px-3 py-2 ring-1 ring-white/5" title="Mean absolute error of each bin's 3-hour-ahead fill forecast, scored when the time comes">
+            <div className="flex items-baseline justify-between text-[10.5px] text-slate-400">
+              <span>Forecast error, 3 h ahead</span>
+              <span className="font-mono text-[10px] text-slate-500">{sim.forecastStats.n.toLocaleString('en-IN')} checks</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="tabular font-mono text-[15px] font-semibold text-neon">±{(sim.forecastStats.mae * 100).toFixed(1)}%</span>
+              <span className="text-[10.5px] text-slate-500">learned · prior alone ±{(sim.forecastStats.priorMae * 100).toFixed(1)}%</span>
+            </div>
+            {sim.forecastStats.byDay.length > 1 && (
+              <Sparkline values={sim.forecastStats.byDay.map((d) => d.mae * 100)} color="#5eead4" height={22} min={0} />
+            )}
+          </div>
+        )}
         <p className="mt-2 text-[10.5px] leading-snug text-slate-500">
           <span className="text-slate-300">Collected ≠ efficient.</span> A truck that empties a quarter-full bin burned fuel for nothing.{' '}
           <span className="text-slate-300">Full ≠ urgent.</span> A 60% market bin at 5 pm overflows before a 90% bin in a quiet lane.

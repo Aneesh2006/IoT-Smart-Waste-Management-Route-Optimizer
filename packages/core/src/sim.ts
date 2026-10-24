@@ -118,6 +118,9 @@ export interface BinState {
   /** Lifetime totals, for heatmaps. */
   generatedL: number;
   overflowHours: number;
+  /** This bin's 3-hour forecast error so far. */
+  forecastN: number;
+  forecastAbs: number;
 }
 
 export type TruckStatus = 'idle' | 'driving' | 'collecting' | 'unloading' | 'returning' | 'broken';
@@ -193,6 +196,17 @@ export interface TapeFrame {
   overflowing: number;
 }
 
+/** How well the forecaster predicted fill three hours ahead, against the untrained district prior. */
+export interface ForecastStats {
+  n: number;
+  /** Mean absolute error in fill fraction. */
+  mae: number;
+  priorMae: number;
+  byDay: { day: number; n: number; mae: number; priorMae: number }[];
+}
+
+export const FORECAST_AHEAD = 3 * 3600;
+
 export interface Snapshot {
   time: number;
   overflowing: number;
@@ -252,6 +266,8 @@ export class Simulation {
   /** The latest bin pickups, newest last, for collection effects. */
   pickups: { id: number; binId: number; truckId: number; litres: number; time: number; wasted: boolean }[] = [];
   private pickupId = 0;
+  forecastStats: ForecastStats = { n: 0, mae: 0, priorMae: 0, byDay: [] };
+  private pendingForecasts: { due: number; binId: number; predicted: number; prior: number; collections: number }[] = [];
   events: SimEvent[] = [];
   lastPlan: ShiftPlan | null = null;
   /** Bumped whenever routes change, so renderers know to rebuild ribbons. */
@@ -319,6 +335,8 @@ export class Simulation {
         // Count what was already in the bin, so collected never exceeds generated.
         generatedL: start * site.capacityL,
         overflowHours: 0,
+        forecastN: 0,
+        forecastAbs: 0,
       };
     });
 
@@ -439,6 +457,7 @@ export class Simulation {
 
     if (Math.floor(t1 / SAMPLE_SECONDS) !== Math.floor(t0 / SAMPLE_SECONDS)) {
       this.sampleSensors();
+      this.scoreForecasts();
       this.record();
     }
     for (let k = 0; k < this.config.shifts.length; k++) {
@@ -968,6 +987,45 @@ export class Simulation {
     }
     if (count) this.routeVersion++;
     return count;
+  }
+
+  /**
+   * Score forecasts that have come due, then make new ones. A forecast is only
+   * scored if no truck emptied the bin in between (that is a plan, not a miss).
+   */
+  private scoreForecasts() {
+    const now = this.time;
+    const s = this.forecastStats;
+    const day = Math.floor(now / DAY);
+    while (this.pendingForecasts.length && this.pendingForecasts[0].due <= now + 1e-6) {
+      const f = this.pendingForecasts.shift()!;
+      const b = this.bins[f.binId];
+      if (!b.sensorOk || b.collections !== f.collections) continue;
+      const err = Math.abs(b.reading - f.predicted);
+      const priorErr = Math.abs(b.reading - f.prior);
+      s.mae = (s.mae * s.n + err) / (s.n + 1);
+      s.priorMae = (s.priorMae * s.n + priorErr) / (s.n + 1);
+      s.n++;
+      let d = s.byDay[s.byDay.length - 1];
+      if (!d || d.day !== day) {
+        d = { day, n: 0, mae: 0, priorMae: 0 };
+        s.byDay.push(d);
+        if (s.byDay.length > 14) s.byDay.shift();
+      }
+      d.mae = (d.mae * d.n + err) / (d.n + 1);
+      d.priorMae = (d.priorMae * d.n + priorErr) / (d.n + 1);
+      d.n++;
+      b.forecastAbs += err;
+      b.forecastN++;
+    }
+    const due = now + FORECAST_AHEAD;
+    for (const b of this.bins) {
+      if (!b.sensorOk) continue;
+      const site = this.city.bins[b.id];
+      let prior = b.reading;
+      for (let t = now; t < due; t += HOUR) prior += profileRate(site.district, t) * Math.min(1, (due - t) / HOUR);
+      this.pendingForecasts.push({ due, binId: b.id, predicted: this.forecast(b.id, due), prior, collections: b.collections });
+    }
   }
 
   private record() {

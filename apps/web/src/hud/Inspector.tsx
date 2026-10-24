@@ -109,6 +109,11 @@ function BinCard({ sim, id }: { sim: Simulation; id: number }) {
               )}
             </div>
             <div className="text-[11px] text-slate-500">Emptied {fmtAgo(sim.time - st.lastCollectedAt)}</div>
+            {st.forecastN > 0 && (
+              <div className="text-[11px] text-slate-500" title="Mean absolute error of this bin's 3-hour-ahead forecasts">
+                Forecast error ±{((st.forecastAbs / st.forecastN) * 100).toFixed(1)}% <span className="text-slate-600">({st.forecastN} checks)</span>
+              </div>
+            )}
             {assigned && (
               <div className="mt-1 flex items-center gap-1 text-[11px]" style={{ color: TRUCK_COLORS[assigned.id % TRUCK_COLORS.length] }}>
                 <Truck size={12} /> {assigned.name} is on its way
