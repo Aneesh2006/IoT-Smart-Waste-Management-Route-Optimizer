@@ -1,11 +1,11 @@
 import { PHONE_EMOJI, topics, type PhoneCommand, type Telemetry } from '@binsight/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { connectMqtt, loadLiveConfig, type LiveConfig, type LiveMqtt } from '../live/aws.ts';
+import { ApiError, clockOffset, connectRealtime, isConfig, loadLiveConfig, phoneIdentity, sendReading, type LiveConfig, type PhoneIdentity } from '../live/cloud.ts';
 
 /**
- * /bin: the audience's phone becomes a smart bin in the live city. It publishes
- * its fill level to AWS IoT Core over MQTT and listens for the truck the cloud
- * dispatches when it gets full.
+ * /bin: the audience's phone becomes a smart bin in the live city. It POSTs its
+ * fill level to the cloud's ingest function and listens on Ably for the truck the
+ * cloud dispatches when it gets full.
  */
 type Item = { emoji: string; name: string; stream: 'wet' | 'dry' };
 
@@ -60,7 +60,7 @@ const buzz = (pattern: number | number[]) => {
 };
 
 export function PhoneApp() {
-  const [cfg, setCfg] = useState<LiveConfig | null | undefined>(undefined);
+  const [cfg, setCfg] = useState<LiveConfig | { error: string } | undefined>(undefined);
   const [nick, setNick] = useState(local.get('binsight.nick') ?? '');
   const [emoji, setEmoji] = useState(local.get('binsight.emoji') ?? PHONE_EMOJI[Math.floor(Math.random() * PHONE_EMOJI.length)]);
   const [joined, setJoined] = useState(false);
@@ -80,9 +80,9 @@ export function PhoneApp() {
         </header>
         {cfg === undefined ? (
           <p className="text-slate-400">Loading…</p>
-        ) : cfg === null ? (
+        ) : !isConfig(cfg) ? (
           <p className="rounded-xl bg-rose-500/10 p-4 text-[14px] text-rose-200 ring-1 ring-rose-400/30">
-            This BinSight isn’t connected to the cloud yet. Open the link from the big screen once the AWS stack is deployed.
+            This BinSight isn’t connected to the cloud yet. Open the link from the big screen once it is deployed. ({cfg.error})
           </p>
         ) : !joined ? (
           <Setup
@@ -152,35 +152,64 @@ function Bin({ cfg, nick, emoji }: { cfg: LiveConfig; nick: string; emoji: strin
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const [truck, setTruck] = useState<{ name: string; eta: number } | null>(null);
   const [collected, setCollected] = useState(false);
-  const mqttRef = useRef<LiveMqtt | null>(null);
-  const idRef = useRef<string>('');
+  const phoneRef = useRef<PhoneIdentity | null>(null);
+  const offsetRef = useRef(0);
   const state = useRef({ fill: 0, score: 0 });
   state.current = { fill, score };
   const lastSent = useRef(0);
   const pending = useRef<number | undefined>(undefined);
+  /** What the cloud hasn't acknowledged yet; resent until it is. A "collected" sticks until delivered. */
+  const unsent = useRef<Partial<Telemetry> | null>(null);
+  const inFlight = useRef(false);
+  const retry = useRef<number | undefined>(undefined);
+
+  const flush = useCallback(async () => {
+    const phone = phoneRef.current;
+    if (!phone || !unsent.current || inFlight.current) return;
+    const extra = unsent.current;
+    unsent.current = null;
+    inFlight.current = true;
+    window.clearTimeout(retry.current);
+    retry.current = undefined;
+    const t: Telemetry = {
+      id: phone.id,
+      kind: 'phone',
+      r: Math.round(state.current.fill * 1000) / 1000,
+      ok: true,
+      temp: 29,
+      gas: Math.round(20 + state.current.fill * 180),
+      bat: 100,
+      tDevice: Date.now() + offsetRef.current,
+      nick,
+      emoji,
+      score: state.current.score,
+      ...extra,
+    };
+    try {
+      await sendReading(phone, t as unknown as Record<string, unknown>);
+      setStatus('live');
+      lastSent.current = Date.now();
+    } catch (e) {
+      // Keep it for the next try (merged under anything newer that is already waiting).
+      unsent.current = { ...extra, ...(unsent.current ?? {}) };
+      if (e instanceof ApiError && e.status === 401) phoneRef.current = await phoneIdentity(true).catch(() => phone);
+      setStatus('offline');
+      setError((e as Error).message);
+      retry.current = window.setTimeout(() => void flush(), 2500);
+    } finally {
+      inFlight.current = false;
+    }
+    // Something newer arrived while this one was on its way.
+    if (unsent.current && retry.current === undefined) void flush();
+  }, [nick, emoji]);
 
   const send = useCallback(
     (extra: Partial<Telemetry> = {}) => {
-      const m = mqttRef.current;
-      if (!m || !idRef.current) return;
-      const t: Telemetry = {
-        id: idRef.current,
-        kind: 'phone',
-        r: Math.round(state.current.fill * 1000) / 1000,
-        ok: true,
-        temp: 29,
-        gas: Math.round(20 + state.current.fill * 180),
-        bat: 100,
-        tDevice: Date.now(),
-        nick,
-        emoji,
-        score: state.current.score,
-        ...extra,
-      };
-      m.client.publish(topics.telemetry(cfg.city, idRef.current), JSON.stringify(t), { qos: 0 });
-      lastSent.current = Date.now();
+      // A pending "collected" must not be overwritten by the next plain reading.
+      unsent.current = unsent.current?.event === 'collected' ? { ...extra, event: 'collected' } : extra;
+      void flush();
     },
-    [cfg.city, nick, emoji],
+    [flush],
   );
 
   /** Coalesce bursts of taps into a few messages a second. */
@@ -195,35 +224,38 @@ function Bin({ cfg, nick, emoji }: { cfg: LiveConfig; nick: string; emoji: strin
 
   useEffect(() => {
     let alive = true;
-    connectMqtt(cfg, { onStatus: (s, d) => alive && (setStatus(s === 'connected' ? 'live' : s === 'reconnecting' ? 'connecting' : s), d && setError(d)) })
-      .then((m) => {
-        if (!alive) return m.close();
-        mqttRef.current = m;
-        idRef.current = `p-${m.identityId}`;
-        setStatus('live');
-        m.client.subscribe(topics.phoneCmd(cfg.city, idRef.current));
-        m.client.on('message', (_topic, payload) => {
-          try {
-            const cmd = JSON.parse(new TextDecoder().decode(payload)) as PhoneCommand;
-            if (cmd.type === 'dispatch') {
-              buzz([200, 100, 200]);
-              setTruck({ name: cmd.truck ?? 'A truck', eta: cmd.eta ?? 20 });
-            }
-          } catch {
-            // ignore malformed commands
+    let close = () => {};
+    (async () => {
+      const [phone, offset] = await Promise.all([phoneIdentity(), clockOffset().catch(() => 0)]);
+      if (!alive) return;
+      phoneRef.current = phone;
+      offsetRef.current = offset;
+      const rt = await connectRealtime(
+        cfg,
+        [topics.phoneCmd(cfg.city, phone.id)],
+        (_topic, data) => {
+          const cmd = data as PhoneCommand;
+          if (cmd?.type === 'dispatch') {
+            buzz([200, 100, 200]);
+            setTruck({ name: cmd.truck ?? 'A truck', eta: cmd.eta ?? 20 });
           }
-        });
-        send();
-      })
-      .catch((e: Error) => {
-        setStatus('error');
-        setError(e.message);
-      });
+        },
+        { onStatus: (s, d) => alive && s !== 'connected' && (setStatus(s === 'reconnecting' ? 'connecting' : s), d && setError(d)) },
+      );
+      if (!alive) return rt.close();
+      close = () => rt.close();
+      setStatus('live');
+      send();
+    })().catch((e: Error) => {
+      setStatus('error');
+      setError(e.message);
+    });
     const heartbeat = window.setInterval(() => send(), 20_000);
     return () => {
       alive = false;
       window.clearInterval(heartbeat);
-      mqttRef.current?.close();
+      window.clearTimeout(retry.current);
+      close();
     };
   }, [cfg, send]);
 
@@ -309,7 +341,7 @@ function Bin({ cfg, nick, emoji }: { cfg: LiveConfig; nick: string; emoji: strin
         </div>
         <div className="flex items-center gap-1.5 text-[12px]">
           <span className="size-2 rounded-full" style={{ background: status === 'live' ? '#34d399' : status === 'connecting' ? '#fbbf24' : '#f87171' }} />
-          {status === 'live' ? 'on AWS IoT Core' : status}
+          {status === 'live' ? 'in the cloud' : status}
         </div>
       </div>
       {error && status !== 'live' && <p className="text-[12px] text-rose-300">{error}</p>}
@@ -379,7 +411,7 @@ function Bin({ cfg, nick, emoji }: { cfg: LiveConfig; nick: string; emoji: strin
           📳 Enable shake-to-throw
         </button>
       )}
-      <p className="text-center text-[11px] text-slate-500">Your bin publishes to AWS IoT Core over MQTT. Find {emoji} {nick} on the big screen.</p>
+      <p className="text-center text-[11px] text-slate-500">Your bin reports over HTTPS to a Vercel function; trucks reach you over Ably. Find {emoji} {nick} on the big screen.</p>
     </div>
   );
 }

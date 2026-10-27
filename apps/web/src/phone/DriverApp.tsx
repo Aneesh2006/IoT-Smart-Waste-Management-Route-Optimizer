@@ -15,11 +15,11 @@ import {
 import { Factory, Home, Trash2, Truck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TRUCK_COLORS } from '../lib/colors.ts';
-import { api, connectMqtt, loadLiveConfig } from '../live/aws.ts';
+import { api, connectRealtime, isConfig, keepFleetTicking, loadLiveConfig } from '../live/cloud.ts';
 
 /**
  * /driver: the crew's phone. It follows one truck through the live city over
- * MQTT (the same messages the big screen gets): next stop, load, the stops
+ * Ably (the same messages the big screen gets): next stop, load, the stops
  * still to do and a small map. `?demo` runs a local simulation instead, for
  * trying it without the cloud.
  */
@@ -72,26 +72,23 @@ function useFeed(): { feed: Feed | null; error: string | null } {
 
     (async () => {
       const cfg = await loadLiveConfig();
-      if (!cfg) throw new Error('This BinSight isn’t connected to the cloud yet. Add ?demo to the address to try the crew app offline.');
-      const control = await api<LiveControl>(cfg, '/config');
+      if (!isConfig(cfg)) throw new Error(`This BinSight isn’t connected to the cloud yet (${cfg.error}). Add ?demo to the address to try the crew app offline.`);
+      const { control, routes } = await api<{ control: LiveControl; routes: RoutesFrame | null }>('/state');
       const city = generateCity({ seed: control.seed, bins: control.bins });
       const world = worldKey(control);
-      setFeed({ city, fleet: null, routes: null, events: [], source: 'live' });
-      const m = await connectMqtt(cfg);
-      stop = () => m.close();
-      const decoder = new TextDecoder();
-      m.client.on('message', (topic, payload) => {
-        let msg: unknown;
-        try {
-          msg = JSON.parse(decoder.decode(payload));
-        } catch {
-          return;
-        }
+      setFeed({ city, fleet: null, routes, events: [], source: 'live' });
+      const rt = await connectRealtime(cfg, [topics.fleet(cfg.city), topics.routes(cfg.city), topics.events(cfg.city)], (topic, msg) => {
+        if (!msg || typeof msg !== 'object') return;
         if (topic === topics.fleet(cfg.city) && (msg as FleetFrame).world === world) setFeed((f) => f && { ...f, fleet: msg as FleetFrame });
         else if (topic === topics.routes(cfg.city) && (msg as RoutesFrame).world === world) setFeed((f) => f && { ...f, routes: msg as RoutesFrame });
         else if (topic === topics.events(cfg.city)) setFeed((f) => f && { ...f, events: [...f.events, ...(msg as LiveEvent[])].slice(-30) });
       });
-      m.client.subscribe([topics.fleet(cfg.city), topics.routes(cfg.city), topics.events(cfg.city)]);
+      // The crew's phone keeps the fleet moving too, even with no big screen open.
+      const untick = keepFleetTicking();
+      stop = () => {
+        untick();
+        rt.close();
+      };
     })().catch((e: Error) => setError(e.message));
     return () => stop();
   }, []);
@@ -112,7 +109,7 @@ export function DriverApp() {
           </span>
           {feed && (
             <span className={`rounded-full px-2 py-0.5 font-mono text-[10.5px] ring-1 ${feed.source === 'live' ? 'text-emerald-300 ring-emerald-400/40' : 'text-amber ring-amber/40'}`}>
-              {feed.source === 'live' ? 'LIVE · IoT Core' : 'DEMO · offline'}
+              {feed.source === 'live' ? 'LIVE · cloud' : 'DEMO · offline'}
             </span>
           )}
         </header>

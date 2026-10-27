@@ -26,7 +26,7 @@ const stateFrom = (src: Simulation, key: string): StateUpdate => {
   const now = Date.now();
   return {
     bins: src.bins.map((b) => ({ id: String(b.id), kind: 'fleet', r: b.reading, ok: b.sensorOk, temp: b.temperature, gas: b.gas, bat: b.battery, tDevice: now, world: key, status: binStatus({ r: b.reading, ok: b.sensorOk, temp: b.temperature }) })),
-    hops: { tDevice: now - 300, tRule: now - 260, tQueue: now - 240, tLambda: now - 150, tStored: now - 90, tPublish: now - 40 },
+    hops: { tDevice: now - 300, tReceived: now - 240, tStored: now - 90, tPublish: now - 40 },
     batch: 10,
   };
 };
@@ -70,10 +70,10 @@ describe('LiveWorld', () => {
 
   it('places phones where every browser will agree', () => {
     const { world } = setup();
-    const id = 'p-ap-south-1:1234';
+    const id = 'p-0b5c6f3e-1234';
     world.applyState({
       bins: [{ id, kind: 'phone', r: 0.5, ok: true, temp: 29, gas: 40, bat: 100, tDevice: Date.now(), nick: 'Priya', emoji: '🐯', status: 'filling' }],
-      hops: { tDevice: 0, tRule: 0, tQueue: 0, tLambda: 0, tStored: 0, tPublish: 0 },
+      hops: { tDevice: 0, tReceived: 0, tStored: 0, tPublish: 0 },
       batch: 1,
     });
     const p = world.phones.get(id)!;

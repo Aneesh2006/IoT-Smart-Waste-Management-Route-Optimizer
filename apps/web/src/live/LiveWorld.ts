@@ -34,7 +34,7 @@ export interface PhoneBin {
   dispatched: boolean;
 }
 
-/** One message's trip through AWS, with the browser's arrival stamped on (server clock). */
+/** One message's trip through the pipeline, with the browser's arrival stamped on (server clock). */
 export interface HopSample extends Hops {
   tBrowser: number;
   batch: number;
@@ -45,12 +45,13 @@ export interface LiveController {
   notify(text: string): void;
 }
 
-const FRAME_MS = 500;
+/** The fleet ticks about once a second; frames are interpolated over the gap actually seen between them. */
+const FRAME_MS = 1000;
 
 /**
  * The browser's view of the cloud city. It is a Simulation so every panel and
  * renderer works unchanged, but nothing is simulated here: bins, trucks, clock,
- * metrics and events are all copied in from MQTT messages.
+ * metrics and events are all copied in from realtime messages.
  */
 export class LiveWorld extends Simulation {
   readonly live = true;
@@ -60,6 +61,7 @@ export class LiveWorld extends Simulation {
   /** Bumped whenever phones join, leave or change, for renderers. */
   phoneVersion = 0;
   private frameAt = 0;
+  private frameGap = FRAME_MS;
   private frameSimT: number;
   private speed = 0;
   private prev: TruckFrame[] = [];
@@ -79,19 +81,19 @@ export class LiveWorld extends Simulation {
     this.time = control.anchorSimT;
     this.events = [];
     this.snapshots = [];
-    this.pushEvent('info', `Live: streaming "${control.seed}" from AWS IoT Core (${control.bins} bins, ${control.trucks} trucks).`);
+    this.pushEvent('info', `Live: streaming "${control.seed}" from the cloud (${control.bins} bins, ${control.trucks} trucks).`);
   }
 
   get world() {
     return worldKey(this.control);
   }
 
-  /** Called every animation frame. Interpolates between the cloud's twice-a-second frames. */
+  /** Called every animation frame. Interpolates between the cloud's fleet frames. */
   override advance() {
     if (!this.frameAt) return;
     const now = performance.now();
-    this.time = this.frameSimT + Math.min(1.5, (now - this.frameAt) / 1000) * this.speed;
-    const a = Math.min(1, (now - this.frameAt) / FRAME_MS);
+    this.time = this.frameSimT + Math.min((this.frameGap * 1.5) / 1000, (now - this.frameAt) / 1000) * this.speed;
+    const a = Math.min(1, (now - this.frameAt) / this.frameGap);
     for (const n of this.next) {
       const t = this.trucks[n.id];
       if (!t) continue;
@@ -161,7 +163,10 @@ export class LiveWorld extends Simulation {
         t.z = n.z;
       }
     }
-    this.frameAt = performance.now();
+    const at = performance.now();
+    // Glide over the real gap between frames (ticks come from browsers' requests, so it varies).
+    if (this.frameAt) this.frameGap = Math.min(3000, Math.max(400, this.frameGap * 0.7 + (at - this.frameAt) * 0.3));
+    this.frameAt = at;
     this.frameSimT = f.simT;
     this.speed = f.speed;
     this.time = f.simT;
@@ -226,10 +231,8 @@ export class LiveWorld extends Simulation {
     if (!recent.length) return null;
     const avg = (f: (h: HopSample) => number) => recent.reduce((s, h) => s + f(h), 0) / recent.length;
     return {
-      deviceToRule: avg((h) => h.tRule - h.tDevice),
-      ruleToQueue: avg((h) => h.tQueue - h.tRule),
-      queueToLambda: avg((h) => h.tLambda - h.tQueue),
-      lambdaToStored: avg((h) => h.tStored - h.tLambda),
+      deviceToFunction: avg((h) => h.tReceived - h.tDevice),
+      functionToStored: avg((h) => h.tStored - h.tReceived),
       storedToPublish: avg((h) => h.tPublish - h.tStored),
       publishToBrowser: avg((h) => h.tBrowser - h.tPublish),
       total: avg((h) => h.tBrowser - h.tDevice),

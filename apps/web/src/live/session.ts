@@ -1,72 +1,46 @@
 import { topics, type Alert, type FleetFrame, type LiveControl, type LiveEvent, type RoutesFrame, type StateUpdate } from '@binsight/core';
 import { useApp } from '../state/store.ts';
-import { api, clockOffset, connectMqtt, loadLiveConfig, operatorSignIn, type LiveConfig, type LiveMqtt } from './aws.ts';
+import { api, clockOffset, connectRealtime, isConfig, keepFleetTicking, loadLiveConfig, operatorSession, operatorSignIn, operatorSignOut, type LiveConfig, type Realtime } from './cloud.ts';
 import { LiveWorld } from './LiveWorld.ts';
 
 /**
  * Live mode's lifecycle: fetch the cloud's state, build a LiveWorld, subscribe to
- * the city's topics and route every message into it.
+ * the city's channels, route every message into it, and keep the lazy fleet ticking.
  */
-let mqtt: LiveMqtt | null = null;
+let realtime: Realtime | null = null;
+let stopTicking: (() => void) | null = null;
 let cfg: LiveConfig | null = null;
 let offset = 0;
 let rebuilding = false;
-const decoder = new TextDecoder();
 
-const TOKEN_KEY = 'binsight.operator';
-
-export function operatorToken(): string | null {
-  try {
-    const raw = window.sessionStorage.getItem(TOKEN_KEY);
-    if (!raw) return null;
-    const { token, expires } = JSON.parse(raw) as { token: string; expires: number };
-    return expires > Date.now() + 30_000 ? token : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function signIn(username: string, password: string) {
+export async function signIn(password: string) {
   if (!cfg) throw new Error('Not connected');
-  const session = await operatorSignIn(cfg, username, password);
-  try {
-    window.sessionStorage.setItem(TOKEN_KEY, JSON.stringify(session));
-  } catch {
-    // Without storage the token simply lasts for this page.
-  }
-  memoryToken = session;
+  await operatorSignIn(password);
   useApp.setState({ operator: true });
 }
 
-let memoryToken: { token: string; expires: number } | null = null;
-
 export function signOut() {
-  try {
-    window.sessionStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // nothing stored
-  }
-  memoryToken = null;
+  void operatorSignOut();
   useApp.setState({ operator: false });
 }
 
-const token = () => operatorToken() ?? (memoryToken && memoryToken.expires > Date.now() ? memoryToken.token : null);
-
 export async function control(body: Record<string, unknown>) {
-  const t = token();
   if (!cfg) return;
-  if (!t) {
+  if (!useApp.getState().operator) {
     useApp.getState().showToast('Sign in as an operator to change the live city.');
     return;
   }
   try {
-    const c = await api<LiveControl>(cfg, '/control', { body, token: t });
+    const c = await api<LiveControl>('/control', { body });
     const world = useApp.getState().sim;
     if (world instanceof LiveWorld) world.control = c;
     useApp.setState({ liveControl: c });
     if (c.epoch !== (world instanceof LiveWorld ? Number(world.world.split(':').pop()) : -1)) void rebuild();
   } catch (e) {
-    useApp.getState().showToast((e as Error).message);
+    const message = (e as Error).message;
+    // The session cookie expired: show the sign-in form again.
+    if (/operator/.test(message)) useApp.setState({ operator: false });
+    useApp.getState().showToast(message);
   }
 }
 
@@ -74,17 +48,17 @@ export async function startLive() {
   const set = useApp.setState;
   set({ liveStatus: 'connecting', liveError: null });
   try {
-    cfg = await loadLiveConfig();
-    if (!cfg) throw new Error('No cloud deployment found (live-config.json is missing). Deploy the AWS stack first.');
-    offset = await clockOffset(cfg);
+    const loaded = await loadLiveConfig();
+    if (!isConfig(loaded)) throw new Error(loaded.error);
+    cfg = loaded;
+    offset = await clockOffset();
     await rebuild();
-    mqtt = await connectMqtt(cfg, {
+    const city = cfg.city;
+    realtime = await connectRealtime(cfg, [topics.state(city), topics.fleet(city), topics.routes(city), topics.events(city), topics.alerts(city)], (topic, msg) => route(city, topic, msg), {
       onStatus: (s, detail) => set({ liveStatus: s === 'connected' ? 'live' : s === 'error' ? 'error' : 'connecting', liveError: detail ?? null }),
     });
-    const city = cfg.city;
-    mqtt.client.on('message', (topic, payload) => route(city, topic, payload));
-    mqtt.client.subscribe([topics.state(city), topics.fleet(city), topics.routes(city), topics.events(city), topics.alerts(city)], { qos: 0 });
-    set({ liveStatus: 'live', operator: Boolean(token()) });
+    stopTicking = keepFleetTicking();
+    set({ liveStatus: 'live', operator: await operatorSession() });
   } catch (e) {
     stopLive();
     set({ liveStatus: 'error', liveError: (e as Error).message });
@@ -93,14 +67,15 @@ export async function startLive() {
   }
 }
 
-/** (Re)build the world from GET /state, e.g. after an operator reset. */
+/** (Re)build the world from GET /api/state, e.g. after an operator reset. */
 async function rebuild() {
   if (!cfg || rebuilding) return;
   rebuilding = true;
   try {
-    const { control: c, bins } = await api<{ control: LiveControl; bins: Record<string, unknown>[] }>(cfg, '/state');
+    const { control: c, bins, routes } = await api<{ control: LiveControl; bins: Record<string, unknown>[]; routes: RoutesFrame | null }>('/state');
     const world = new LiveWorld(c, { control, notify: (t) => useApp.getState().showToast(t) }, offset);
     world.applySnapshot(bins);
+    if (routes) world.applyRoutes(routes);
     useApp.setState((s) => ({
       sim: world,
       simKey: s.simKey + 1,
@@ -116,15 +91,9 @@ async function rebuild() {
   }
 }
 
-function route(city: string, topic: string, payload: Uint8Array) {
+function route(city: string, topic: string, msg: unknown) {
   const world = useApp.getState().sim;
-  if (!(world instanceof LiveWorld)) return;
-  let msg: unknown;
-  try {
-    msg = JSON.parse(decoder.decode(payload));
-  } catch {
-    return;
-  }
+  if (!(world instanceof LiveWorld) || !msg || typeof msg !== 'object') return;
   if (topic === topics.state(city)) world.applyState(msg as StateUpdate);
   else if (topic === topics.fleet(city)) {
     if (!world.applyFleet(msg as FleetFrame)) void rebuild();
@@ -138,8 +107,10 @@ function route(city: string, topic: string, payload: Uint8Array) {
 }
 
 export function stopLive() {
-  mqtt?.close();
-  mqtt = null;
+  realtime?.close();
+  realtime = null;
+  stopTicking?.();
+  stopTicking = null;
   useApp.setState({ liveStatus: 'off', liveError: null });
 }
 
