@@ -120,7 +120,7 @@ function XRayPanel() {
   const phones = sim instanceof LiveWorld ? sim.phones.size : 0;
   const demo = pipelineCost(perMin * 60 * 24 * 30);
   const city = pipelineCost(cityBins * 4 * 24 * 30);
-  const usd = (v: number) => (v < 0.01 ? `$${v.toFixed(4)}` : v < 10 ? `$${v.toFixed(2)}` : `$${Math.round(v).toLocaleString('en-IN')}`);
+  const usd = (v: number) => (v === 0 ? '$0' : v < 0.01 ? `$${v.toFixed(4)}` : v < 10 ? `$${v.toFixed(2)}` : `$${Math.round(v).toLocaleString('en-IN')}`);
 
   const badge: Partial<Record<NodeKey, string>> = {
     bins: `${sim.bins.length} sensors`,

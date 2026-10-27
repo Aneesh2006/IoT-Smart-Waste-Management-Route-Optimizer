@@ -34,7 +34,7 @@ export default defineConfig({
   // Polling: native file events are unreliable on some Windows setups and edits get missed.
   // /api goes to the local API server (`pnpm dev:live`); in production Vercel serves it on the same origin.
   server: {
-    port: Number(process.env.WEB_PORT ?? 5173),
+    port: Number(process.env.WEB_PORT ?? process.env.PORT ?? 5173),
     host: true,
     watch: { usePolling: true, interval: 250 },
     proxy: { '/api': { target: `http://localhost:${process.env.API_PORT ?? 3001}`, changeOrigin: false } },
