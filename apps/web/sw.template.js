@@ -1,7 +1,7 @@
 /* BinSight service worker, generated at build time (see vite.config.ts).
  * Precaches every file of this build so Sandbox mode works offline:
  * pages network-first (falling back to the cached app), hashed assets
- * cache-first. live-config.json is never cached, so Live mode always sees
+ * cache-first. The /api routes are never cached, so Live mode always sees
  * the current cloud. */
 const VERSION = '__VERSION__';
 const FILES = __FILES__;
@@ -29,7 +29,7 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
-  if (url.pathname === '/live-config.json') return;
+  if (url.pathname.startsWith('/api/')) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(

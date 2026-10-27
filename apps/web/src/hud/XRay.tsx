@@ -1,63 +1,12 @@
 import { Radar, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { PRICES, pipelineCost } from '../lib/pricing.ts';
-import { LiveWorld, type HopSample } from '../live/LiveWorld.ts';
+import { LiveWorld } from '../live/LiveWorld.ts';
+import { EDGES, HOPS, METRIC_SERIES, NODES, PIPELINE_TEXT, legsFor, syntheticHops, type NodeKey } from '../live/pipeline.ts';
 import { emitPacket, onPacket, recentPackets, type Packet } from '../live/xrayFeed.ts';
 import { useApp } from '../state/store.ts';
 import { Sparkline } from './Sparkline.tsx';
 import { IconButton, Panel } from './ui.tsx';
-
-type NodeKey = keyof typeof NODES;
-
-const NODES = {
-  sched: { x: 95, y: 70, label: 'EventBridge', sub: 'every minute', color: '#f472b6' },
-  fleet: { x: 285, y: 70, label: 'λ fleet', sub: 'virtual devices', color: '#fb923c' },
-  bins: { x: 95, y: 230, label: 'Smart bins', sub: 'MQTT publish', color: '#5eead4' },
-  phones: { x: 95, y: 360, label: 'Phones', sub: '/bin over WSS', color: '#e879f9' },
-  iot: { x: 285, y: 295, label: 'IoT Core', sub: 'MQTT broker', color: '#a3e635' },
-  rule: { x: 455, y: 295, label: 'IoT Rule', sub: 'SQL → SQS', color: '#a3e635' },
-  sqs: { x: 625, y: 295, label: 'SQS', sub: 'buffer queue', color: '#f472b6' },
-  dlq: { x: 625, y: 430, label: 'Dead letters', sub: 'after 3 tries', color: '#fb7185' },
-  ingest: { x: 795, y: 295, label: 'λ ingest', sub: 'store + fan-out', color: '#fb923c' },
-  ddb: { x: 795, y: 130, label: 'DynamoDB', sub: 'Bins · Readings', color: '#818cf8' },
-  sns: { x: 965, y: 130, label: 'SNS', sub: 'fire alerts', color: '#f472b6' },
-  pub: { x: 965, y: 295, label: 'IoT Core', sub: 'publish', color: '#a3e635' },
-  web: { x: 1135, y: 295, label: 'This screen', sub: 'MQTT over WSS', color: '#5eead4' },
-  api: { x: 965, y: 455, label: 'API Gateway', sub: 'HTTP API', color: '#f472b6' },
-  apiFn: { x: 795, y: 455, label: 'λ api', sub: 'state · metrics', color: '#fb923c' },
-  cw: { x: 625, y: 540, label: 'CloudWatch', sub: 'metrics', color: '#c084fc' },
-  cognito: { x: 1135, y: 455, label: 'Cognito', sub: 'guests · operators', color: '#f87171' },
-} as const;
-
-const EDGES: [NodeKey, NodeKey, boolean?][] = [
-  ['sched', 'fleet'],
-  ['fleet', 'iot'],
-  ['bins', 'iot'],
-  ['phones', 'iot'],
-  ['iot', 'rule'],
-  ['rule', 'sqs'],
-  ['sqs', 'dlq', true],
-  ['sqs', 'ingest'],
-  ['ingest', 'ddb'],
-  ['ingest', 'sns', true],
-  ['ingest', 'pub'],
-  ['pub', 'web'],
-  ['pub', 'phones', true],
-  ['web', 'api', true],
-  ['api', 'apiFn', true],
-  ['apiFn', 'ddb', true],
-  ['apiFn', 'cw', true],
-  ['cognito', 'web', true],
-];
-
-const HOPS: { key: string; label: string; color: string; ms: (h: HopSample) => number }[] = [
-  { key: 'd', label: 'device → IoT rule', color: '#5eead4', ms: (h) => h.tRule - h.tDevice },
-  { key: 'q', label: 'rule → SQS', color: '#a3e635', ms: (h) => h.tQueue - h.tRule },
-  { key: 'l', label: 'SQS → Lambda', color: '#f472b6', ms: (h) => h.tLambda - h.tQueue },
-  { key: 's', label: 'Lambda → DynamoDB', color: '#818cf8', ms: (h) => h.tStored - h.tLambda },
-  { key: 'p', label: 'store → publish', color: '#fb923c', ms: (h) => h.tPublish - h.tStored },
-  { key: 'b', label: 'IoT → this screen', color: '#38bdf8', ms: (h) => h.tBrowser - h.tPublish },
-];
 
 const SLOW = 4;
 const seg = (ms: number) => Math.min(2400, Math.max(200, ms * SLOW));
@@ -67,40 +16,6 @@ interface Flight {
   start: number;
   legs: { a: NodeKey; b: NodeKey; dur: number }[];
   total: number;
-}
-
-function legsFor(p: Packet): Flight['legs'] {
-  const h = p.hops;
-  const src: NodeKey = p.kind === 'phone' ? 'phones' : 'bins';
-  const store = Math.max(0, h.tStored - h.tLambda) / 2;
-  return [
-    { a: src, b: 'iot', dur: seg(h.tRule - h.tDevice) },
-    { a: 'iot', b: 'rule', dur: 220 },
-    { a: 'rule', b: 'sqs', dur: seg(h.tQueue - h.tRule) },
-    { a: 'sqs', b: 'ingest', dur: seg(h.tLambda - h.tQueue) },
-    { a: 'ingest', b: 'ddb', dur: seg(store) },
-    { a: 'ddb', b: 'ingest', dur: seg(store) },
-    { a: 'ingest', b: 'pub', dur: seg(h.tPublish - h.tStored) },
-    { a: 'pub', b: 'web', dur: seg(h.tBrowser - h.tPublish) },
-  ];
-}
-
-const gauss = (mean: number, sd: number) => {
-  const u = 1 - Math.random();
-  const v = Math.random();
-  return mean + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-};
-
-/** Sandbox stand-in: modelled hop timings for the local simulation's sensor batches. */
-function syntheticHops(batch: number): HopSample {
-  const t0 = Date.now() - 600;
-  const tRule = t0 + Math.max(15, gauss(42, 9));
-  const tQueue = tRule + Math.max(4, gauss(16, 5));
-  const tLambda = tQueue + Math.max(15, gauss(85, 35));
-  const tStored = tLambda + Math.max(8, gauss(38, 10));
-  const tPublish = tStored + Math.max(5, gauss(22, 6));
-  const tBrowser = tPublish + Math.max(20, gauss(70, 25));
-  return { tDevice: t0, tRule, tQueue, tLambda, tStored, tPublish, tBrowser, batch };
 }
 
 export function XRay() {
@@ -125,7 +40,7 @@ function XRayPanel() {
   useEffect(
     () =>
       onPacket((p) => {
-        const legs = legsFor(p);
+        const legs = legsFor(p, seg);
         flightsRef.current = [...flightsRef.current.slice(-24), { packet: p, start: performance.now(), legs, total: legs.reduce((s, l) => s + l.dur, 0) }];
         const n = p.kind === 'fleet' ? Math.max(1, (p.payload as { bins?: unknown[] })?.bins?.length ?? p.hops.batch) : 1;
         rate.current.push({ t: Date.now(), n });
@@ -177,15 +92,13 @@ function XRayPanel() {
     };
   }, []);
 
-  // Live: CloudWatch through the API every 15 s.
+  // Live: the pipeline's counters through the API every 15 s.
   useEffect(() => {
     if (!live) return;
     let alive = true;
     const pull = async () => {
-      const [{ liveConfig }, { api }] = await Promise.all([import('../live/session.ts'), import('../live/aws.ts')]);
-      const cfg = liveConfig();
-      if (!cfg) return;
-      const m = await api<NonNullable<typeof metrics>>(cfg, '/metrics').catch(() => null);
+      const { api } = await import('../live/cloud.ts');
+      const m = await api<NonNullable<typeof metrics>>('/metrics').catch(() => null);
       if (alive && m) setMetrics(m);
     };
     void pull();
@@ -212,11 +125,11 @@ function XRayPanel() {
   const badge: Partial<Record<NodeKey, string>> = {
     bins: `${sim.bins.length} sensors`,
     phones: `${phones} joined`,
-    iot: `${perMin}/min`,
-    sqs: metrics ? `depth ${metrics.queue.visible + metrics.queue.inFlight}` : live ? '…' : 'depth 0',
+    ingest: `${perMin}/min`,
+    inbox: metrics ? `depth ${metrics.queue.visible + metrics.queue.inFlight}` : live ? '…' : 'depth 0',
     dlq: metrics ? `${metrics.queue.dlq}` : '0',
-    ingest: `${Math.max(1, Math.round(perMin / 10))} runs/min`,
-    ddb: `${perMin * 2} writes/min`,
+    mongo: `${perMin * 2} writes/min`,
+    ably: `${Math.max(1, Math.round(perMin / 25))} msgs/min`,
     web: hops.length ? `${Math.round(total)} ms` : '…',
   };
 
@@ -229,12 +142,12 @@ function XRayPanel() {
               <div className="eyebrow flex items-center gap-1.5">
                 <Radar size={12} /> Cloud X-Ray
               </div>
-              <h2 className="text-lg font-bold">Every reading’s trip through AWS</h2>
+              <h2 className="text-lg font-bold">{PIPELINE_TEXT.title}</h2>
             </div>
             <div className="flex items-center gap-2">
               <span
                 className={`rounded-full px-2.5 py-1 font-mono text-[11px] ring-1 ${live ? 'bg-emerald-400/10 text-emerald-300 ring-emerald-400/40' : 'bg-amber/10 text-amber ring-amber/40'}`}
-                title={live ? 'Timestamps stamped by IoT Core, SQS and Lambda' : 'Typical timings, modelled. Switch to Live to measure real ones.'}
+                title={live ? PIPELINE_TEXT.measuredTitle : 'Typical timings, modelled. Switch to Live to measure real ones.'}
               >
                 {live ? 'LIVE · measured' : 'SANDBOX · modelled timings'}
               </span>
@@ -355,24 +268,15 @@ function XRayPanel() {
                 <div className="eyebrow mb-1">Real-time ≠ instant</div>
                 <div className="tabular font-mono text-3xl font-bold text-neon">{hops.length ? `${Math.round(total)} ms` : '—'}</div>
                 <p className="text-[11.5px] leading-snug text-slate-400">
-                  From a bin’s sensor to this screen, through six AWS hops. SQS → Lambda is usually the biggest slice: the price of a buffer that never loses a reading.
+                  From a bin’s sensor to this screen, through {PIPELINE_TEXT.hops}. {PIPELINE_TEXT.biggest}
                 </p>
               </div>
 
               <div className="rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
-                <div className="eyebrow mb-2">CloudWatch</div>
+                <div className="eyebrow mb-2">{PIPELINE_TEXT.metricsEyebrow}</div>
                 {live && metrics ? (
                   <div className="space-y-2">
-                    {(
-                      [
-                        ['ruleMatches', 'IoT rule matches /min', '#a3e635'],
-                        ['sqsDepth', 'SQS queue depth', '#f472b6'],
-                        ['ingestInv', 'Ingest invocations /min', '#fb923c'],
-                        ['ingestDur', 'Ingest duration ms', '#fbbf24'],
-                        ['ingestConc', 'Ingest concurrency', '#f87171'],
-                        ['readingsWcu', 'DynamoDB writes /min', '#818cf8'],
-                      ] as const
-                    ).map(([id, label, color]) => {
+                    {METRIC_SERIES.map(([id, label, color]) => {
                       const v = metrics.series[id]?.v ?? [];
                       return (
                         <div key={id}>
@@ -384,10 +288,12 @@ function XRayPanel() {
                         </div>
                       );
                     })}
-                    <p className="text-[10px] text-slate-500">CloudWatch lags a minute or two; queue depth is read live from SQS.</p>
+                    <p className="text-[10px] text-slate-500">
+                      {PIPELINE_TEXT.metricsNote} Inbox: {metrics.queue.visible}, dead letters: {metrics.queue.dlq}.
+                    </p>
                   </div>
                 ) : (
-                  <p className="text-[11.5px] text-slate-500">{live ? 'Loading metrics…' : 'Live mode pulls Lambda, SQS, IoT and DynamoDB metrics here.'}</p>
+                  <p className="text-[11.5px] text-slate-500">{live ? 'Loading metrics…' : PIPELINE_TEXT.metricsSandbox}</p>
                 )}
               </div>
 
@@ -407,14 +313,12 @@ function XRayPanel() {
                   </span>
                 </div>
                 <div className="text-right font-mono text-[11px] text-slate-500">≈ ₹{Math.round(city.total * PRICES.usdToInr).toLocaleString('en-IN')}</div>
-                <div className="mt-2 grid grid-cols-5 gap-1 text-center text-[9.5px] text-slate-500">
+                <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[9.5px] text-slate-500">
                   {(
                     [
-                      ['IoT', city.iot],
-                      ['Rules', city.rules],
-                      ['SQS', city.sqs],
-                      ['λ', city.lambda],
-                      ['DDB', city.dynamo],
+                      ['Vercel ƒ', city.fn],
+                      ['Ably', city.realtime],
+                      [`Atlas ${city.dbTier}`, city.db],
                     ] as const
                   ).map(([k, v]) => (
                     <div key={k} className="rounded bg-black/30 py-1">
@@ -423,7 +327,9 @@ function XRayPanel() {
                     </div>
                   ))}
                 </div>
-                <p className="mt-2 text-[10px] leading-snug text-slate-500">Approximate list prices, three dashboards watching. Check aws.amazon.com/pricing before quoting.</p>
+                <p className="mt-2 text-[10px] leading-snug text-slate-500">
+                  Approximate list prices, three dashboards watching; Atlas is the cluster tier the write rate needs. Check the Vercel, Ably and MongoDB pricing pages before quoting.
+                </p>
               </div>
 
               {picked && (

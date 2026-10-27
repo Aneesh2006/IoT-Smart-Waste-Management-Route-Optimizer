@@ -121,7 +121,7 @@ export function GuideModal() {
             <Try
               items={[
                 <>
-                  <b>Cloud X-Ray</b> (<K>X</K>): every batch of readings flies through IoT Core, SQS, Lambda and DynamoDB with each hop timed, plus what the pipeline would
+                  <b>Cloud X-Ray</b> (<K>X</K>): every batch of readings flies through the ingest function, MongoDB Atlas and Ably with each hop timed, plus what the pipeline would
                   cost for a real city.
                 </>,
                 <>
@@ -133,7 +133,7 @@ export function GuideModal() {
                   before anyone buys them.
                 </>,
                 <>
-                  <b>Bin inspector</b>: the Inside tab shows the sensor hardware, the MQTT tab the exact message on the wire. <b>Truck inspector</b> opens the crew app
+                  <b>Bin inspector</b>: the Inside tab shows the sensor hardware, the Wire tab the exact message it sends. <b>Truck inspector</b> opens the crew app
                   (/driver).
                 </>,
                 <>
@@ -143,11 +143,11 @@ export function GuideModal() {
               ]}
             />
 
-            <H>Live on AWS</H>
+            <H>Live in the cloud</H>
             <P>
-              Switch to <b>Live</b> once the stack is deployed: a Lambda replays the city and publishes every bin as an MQTT device to AWS IoT Core, and every pillar you
-              see has travelled IoT Core → SQS → Lambda → DynamoDB → back to the browser. Phones join at <b>/bin</b> by scanning the QR code; operators sign in with Cognito
-              to start the fleet, change speed, pause ingest or reset the city.
+              Switch to <b>Live</b> once it is deployed on Vercel: the cloud replays the city as requests come in and reports every bin to the ingest function, and every
+              pillar you see has travelled a Vercel function → MongoDB Atlas → Ably → back to the browser. Phones join at <b>/bin</b> by scanning the QR code; operators
+              sign in with the operator password to start the fleet, change speed, pause ingest or reset the city.
             </P>
 
             <H>Assumptions</H>

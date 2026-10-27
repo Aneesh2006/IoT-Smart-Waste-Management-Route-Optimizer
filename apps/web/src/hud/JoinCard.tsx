@@ -31,8 +31,8 @@ export function JoinCard() {
           <div className="mb-1 flex items-center gap-1.5 font-semibold text-slate-200">
             <Smartphone size={13} /> Your phone is a smart bin
           </div>
-          Scan to join. Throw trash, sort it wet or dry, and watch your bin fill on this screen through AWS IoT Core.
-          {local && <div className="mt-1 text-amber">Phones can't reach localhost: open the CloudFront URL on this screen first.</div>}
+          Scan to join. Throw trash, sort it wet or dry, and watch your bin fill on this screen through the cloud.
+          {local && <div className="mt-1 text-amber">Phones can't reach localhost: open the deployed Vercel URL on this screen first.</div>}
         </div>
       </div>
       {phones.length > 0 && (

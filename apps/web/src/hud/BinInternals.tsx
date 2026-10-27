@@ -13,7 +13,7 @@ export function BinAnatomy({ site, st }: { site: BinSite; st: BinState }) {
   const color = fillCss(st.reading);
   const parts = [
     { y: 34, label: 'Ultrasonic sensor', detail: `JSN-SR04T · echo ${distance} cm → ${Math.round(fill * 100)}% full`, color: '#5eead4' },
-    { y: 64, label: 'ESP32 + NB-IoT radio', detail: 'samples every 15 min · MQTT over TLS', color: '#a3e635' },
+    { y: 64, label: 'ESP32 + NB-IoT radio', detail: 'samples every 15 min · HTTPS over TLS', color: '#a3e635' },
     { y: 94, label: 'Gas sensor', detail: `MQ-135 · ${Math.round(st.gas)} ppm${st.gas > 400 ? ' (rotting)' : ''}`, color: '#fbbf24' },
     { y: 124, label: 'Temperature', detail: `DS18B20 · ${st.temperature.toFixed(1)} °C${st.temperature > 60 ? ' FIRE' : ''}`, color: st.temperature > 60 ? '#f97316' : '#60a5fa' },
     { y: 154, label: 'Battery + solar lid', detail: `${Math.round(st.battery)}% · ${st.sensorOk ? 'online' : 'offline'}`, color: st.sensorOk ? '#94a3b8' : '#f87171' },
@@ -62,14 +62,14 @@ export function BinAnatomy({ site, st }: { site: BinSite; st: BinState }) {
         })}
       </svg>
       <p className="mt-1 text-[10.5px] leading-snug text-slate-500">
-        Fill = 1 − echo distance ÷ bin height ({H} cm). A reference design for the build; in Sandbox the readings come from the simulator, in Live from the device over MQTT.
+        Fill = 1 − echo distance ÷ bin height ({H} cm). A reference design for the build; in Sandbox the readings come from the simulator, in Live from the device over HTTPS.
       </p>
     </Section>
   );
 }
 
-/** The exact topic and JSON this bin publishes to AWS IoT Core. */
-export function BinMqtt({ site, st, city }: { site: BinSite; st: BinState; city: string }) {
+/** The exact request and JSON this bin sends to the cloud's ingest function. */
+export function BinWire({ site, st, city }: { site: BinSite; st: BinState; city: string }) {
   const payload: Telemetry = {
     id: String(site.id),
     kind: 'fleet',
@@ -87,20 +87,24 @@ export function BinMqtt({ site, st, city }: { site: BinSite; st: BinState; city:
     <Section title="On the wire">
       <div className="space-y-1.5 text-[11px]">
         <div className="flex justify-between gap-2">
+          <span className="text-slate-500">Request</span>
+          <code className="truncate font-mono text-teal-200">POST /api/ingest</code>
+        </div>
+        <div className="flex justify-between gap-2">
           <span className="text-slate-500">Topic</span>
           <code className="truncate font-mono text-teal-200">{topics.telemetry(city, String(site.id))}</code>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Protocol</span>
-          <span className="font-mono text-slate-300">MQTT 3.1.1 · QoS 0 · TLS 1.2</span>
+          <span className="font-mono text-slate-300">HTTPS · JSON · signed device token</span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Size</span>
-          <span className="font-mono text-slate-300">{bytes} bytes (billed as 1 message)</span>
+          <span className="font-mono text-slate-300">{bytes} bytes (one function call)</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-slate-500">IoT rule</span>
-          <span className="font-mono text-slate-300">adds city, binId, tRule → SQS</span>
+          <span className="text-slate-500">Ingest</span>
+          <span className="font-mono text-slate-300">adds city, tReceived → MongoDB</span>
         </div>
       </div>
       <pre className="scroll-thin mt-2 max-h-48 overflow-auto rounded-lg bg-black/40 p-2 font-mono text-[10.5px] leading-snug text-slate-200 ring-1 ring-white/10">{json}</pre>
