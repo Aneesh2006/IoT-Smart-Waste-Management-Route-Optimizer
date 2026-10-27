@@ -2,8 +2,7 @@ packages:
   - apps/*
   - packages/*
   - services
-  - infra
 
-# esbuild bundles the Lambda functions; its install script fetches the native binary.
+# esbuild bundles the API for Vercel; its install script fetches the native binary.
 allowBuilds:
   esbuild: true
