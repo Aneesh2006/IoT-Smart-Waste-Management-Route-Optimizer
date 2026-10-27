@@ -1,79 +1,158 @@
-import { CloudWatchClient, GetMetricDataCommand, type MetricDataQuery } from '@aws-sdk/client-cloudwatch';
-import { InvokeCommand, LambdaClient, UpdateEventSourceMappingCommand } from '@aws-sdk/client-lambda';
-import { GetQueueAttributesCommand, SQSClient } from '@aws-sdk/client-sqs';
-import { QueryCommand } from '@aws-sdk/lib-dynamodb';
-import {
-  CHAOS_ORDER,
-  LIVE_SIM_QUANTUM,
-  LIVE_START_SIM_T,
-  POLICY_ORDER,
-  simTimeAt,
-  worldKey,
-  type ChaosKind,
-  type LiveControl,
-  type PolicyId,
-} from '@binsight/core';
-import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { ddb, env, loadControl, saveControl } from './shared.ts';
+import { CHAOS_ORDER, LIVE_SIM_QUANTUM, LIVE_START_SIM_T, POLICY_ORDER, simTimeAt, worldKey, type ChaosKind, type LiveControl, type PolicyId } from '@binsight/core';
+import { OPERATOR_COOKIE, newPhone, operatorCookie, passwordMatches, readCookie, signToken, verifyToken, OPERATOR_TTL_MS } from './auth.ts';
+import { db } from './db.ts';
+import { tick } from './fleet.ts';
+import { BadReading, ingestPhone } from './ingest.ts';
+import { bump, series } from './metrics.ts';
+import { realtimeMode, tokenRequest } from './realtime.ts';
+import { after, env, loadControl, saveControl } from './shared.ts';
 
 /**
- * The HTTP API: public reads (config, state, time, metrics) and the operator's
- * control endpoint, which API Gateway only lets through with a Cognito token.
+ * The HTTP API, framework-free (Web Request → Response) so the same code runs as
+ * one Vercel function and under the local dev server: public reads (live config,
+ * time, state, metrics), the lazy fleet tick, phone ingest, realtime tokens, and
+ * the operator's sign-in and control endpoint.
  */
-const json = (status: number, body: unknown): APIGatewayProxyResultV2 => ({
-  statusCode: status,
-  headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  body: JSON.stringify(body),
-});
+const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers } });
 
-let lambda: LambdaClient | undefined;
-let sqs: SQSClient | undefined;
-let cw: CloudWatchClient | undefined;
+/** The route is the path after /api/ ("state", "control", …); Vercel's dynamic route also passes it as ?route=. */
+export function routeOf(url: URL) {
+  return (url.searchParams.get('route') || url.pathname.replace(/^\/api\/?/, '')).replace(/\/+$/, '');
+}
 
-export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
-  const route = `${event.requestContext.http.method} ${event.rawPath.replace(/\/+$/, '') || '/'}`;
+export async function handle(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const route = `${request.method} ${routeOf(url)}`;
   try {
-    switch (route) {
-      case 'GET /time':
-        return json(200, { now: Date.now() });
-      case 'GET /config':
-        return json(200, await loadControl());
-      case 'GET /state':
-        return json(200, await state());
-      case 'GET /metrics':
-        return json(200, await metrics());
-      case 'POST /control': {
-        let body: unknown = null;
-        try {
-          body = JSON.parse(event.body || '{}');
-        } catch {}
-        if (typeof body !== 'object' || body === null) return json(400, { error: 'Body must be a JSON object' });
-        return await control(body as ControlBody);
-      }
-      default:
-        return json(404, { error: `No route ${route}` });
-    }
+    const res = await dispatch(route, request, url);
+    if (route !== 'GET time' && res.status !== 503) after(bump({ apiCalls: 1 }));
+    return res;
   } catch (e) {
-    console.error(e);
-    return json(500, { error: (e as Error).message });
+    const message = (e as Error).message ?? String(e);
+    console.error(route, e);
+    // Missing configuration is the deployer's problem, not a crash: say what to set.
+    return json(message.startsWith('Missing environment variable') ? 503 : 500, { error: message });
   }
-};
+}
+
+async function dispatch(route: string, request: Request, url: URL): Promise<Response> {
+  switch (route) {
+    case 'GET time':
+      return json(200, { now: Date.now() });
+    case 'GET live-config':
+      if (!process.env.MONGODB_URI) return json(503, { error: 'Live mode is not set up on this deployment (MONGODB_URI is missing).' });
+      return json(200, { city: env.city, realtime: realtimeMode() });
+    case 'GET config':
+      await tickQuietly();
+      return json(200, await loadControl());
+    case 'GET state':
+      await tickQuietly();
+      return json(200, await state());
+    case 'GET tick':
+    case 'POST tick':
+      return json(200, await tick());
+    case 'GET cron':
+      // Vercel Cron's backup tick (the free plan runs it daily). Also clears out the inbox.
+      if (env.cronSecret && request.headers.get('authorization') !== `Bearer ${env.cronSecret}`) return json(401, { error: 'Not the cron' });
+      return json(200, await tick({ force: true }));
+    case 'GET metrics':
+      return json(200, await metrics());
+    case 'GET realtime-token':
+      return json(200, await tokenRequest());
+    case 'POST phone':
+      return json(200, newPhone());
+    case 'POST ingest':
+      return ingest(request);
+    case 'GET session':
+      return json(200, { operator: Boolean(operator(request)) });
+    case 'POST login': {
+      const body = await readJson(request);
+      if (!env.operatorPassword) return json(503, { error: 'Operator sign-in is off: set OPERATOR_PASSWORD.' });
+      if (!body || !passwordMatches(body.password)) return json(401, { error: 'Wrong operator password.' });
+      const token = signToken({ sub: 'operator', role: 'operator', exp: Date.now() + OPERATOR_TTL_MS });
+      return json(200, { operator: true }, { 'set-cookie': operatorCookie(token, url.protocol === 'https:') });
+    }
+    case 'POST logout':
+      return json(200, { operator: false }, { 'set-cookie': operatorCookie('', url.protocol === 'https:', 0) });
+    case 'POST control': {
+      if (!operator(request)) return json(401, { error: 'Not signed in as an operator (or the session expired).' });
+      const body = await readJson(request);
+      if (!body) return json(400, { error: 'Body must be a JSON object' });
+      return control(body as ControlBody);
+    }
+    default:
+      return json(404, { error: `No route ${route}` });
+  }
+}
+
+/** Reads advance the fleet first, but a failed tick mustn't fail the read. */
+async function tickQuietly() {
+  try {
+    await tick();
+  } catch (e) {
+    console.error('tick', e);
+  }
+}
+
+async function readJson(request: Request): Promise<Record<string, unknown> | null> {
+  // JSON only: a cross-site form can't send it without a CORS preflight, which this API never answers.
+  if (!(request.headers.get('content-type') ?? '').includes('application/json')) return null;
+  try {
+    const body = await request.json();
+    return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function operator(request: Request) {
+  return verifyToken(readCookie(request.headers.get('cookie'), OPERATOR_COOKIE), 'operator');
+}
 
 async function state() {
   const c = await loadControl();
   const world = worldKey(c);
-  const items: Record<string, unknown>[] = [];
-  let start: Record<string, unknown> | undefined;
-  do {
-    const page = await ddb().send(
-      new QueryCommand({ TableName: env.binsTable, KeyConditionExpression: 'city = :c', ExpressionAttributeValues: { ':c': c.city }, ExclusiveStartKey: start }),
-    );
-    items.push(...((page.Items as Record<string, unknown>[]) ?? []));
-    start = page.LastEvaluatedKey;
-  } while (start);
+  const col = await db();
   const now = Date.now();
-  const bins = items.filter((it) => (it.kind === 'phone' ? now - Number(it.lastSeen) < 2 * 3600_000 : it.world === world));
-  return { control: c, bins };
+  const [bins, fleet] = await Promise.all([
+    col.bins
+      .find({ city: c.city, $or: [{ kind: 'phone', lastSeen: { $gt: now - 2 * 3600_000 } }, { kind: 'fleet', world }] }, { projection: { _id: 0, expiresAt: 0 } })
+      .toArray(),
+    col.fleet.findOne({ city: c.city }, { projection: { _id: 0, routes: 1 } }),
+  ]);
+  return { control: c, bins, routes: fleet?.routes?.world === world ? fleet.routes : null };
+}
+
+/** At most 10 readings a second per phone, per function instance. Enough for the tap game, not for a flood. */
+const phoneRate = new Map<string, { at: number; n: number }>();
+function allowPhone(id: string, now: number) {
+  const w = phoneRate.get(id);
+  if (!w || now - w.at >= 1000) {
+    if (phoneRate.size > 5000) phoneRate.clear();
+    phoneRate.set(id, { at: now, n: 1 });
+    return true;
+  }
+  return ++w.n <= 10;
+}
+
+async function ingest(request: Request) {
+  const now = Date.now();
+  const bearer = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
+  const phone = verifyToken(bearer, 'phone');
+  if (!phone) return json(401, { error: 'Unknown phone: ask /api/phone for an id first.' });
+  if (!allowPhone(phone.sub, now)) return json(429, { error: 'Too many readings' });
+  const body = await readJson(request);
+  if (!body) return json(400, { error: 'Body must be a JSON object' });
+  try {
+    const status = await ingestPhone(body, phone.sub, now);
+    // The phone has its answer; keep the city moving after the response.
+    after(tick());
+    return json(status === 'stored' ? 200 : 202, { status });
+  } catch (e) {
+    if (e instanceof BadReading) return json(400, { error: e.message });
+    throw e;
+  }
 }
 
 type ControlBody =
@@ -138,72 +217,25 @@ async function control(body: ControlBody) {
       break;
     }
     case 'ingest':
-      lambda ??= new LambdaClient({});
-      await lambda.send(new UpdateEventSourceMappingCommand({ UUID: process.env.INGEST_MAPPING_ID, Enabled: !body.paused }));
-      c.ingestPaused = body.paused;
+      // Paused, readings wait in the inbox; resumed, the next tick drains it. Nothing is lost.
+      c.ingestPaused = Boolean(body.paused);
+      kick = !c.ingestPaused;
       break;
     default:
       return json(400, { error: 'Unknown action' });
   }
   await saveControl(c);
-  // Don't make the room wait up to a minute for the scheduled run.
-  if (kick && process.env.FLEET_FUNCTION) {
-    lambda ??= new LambdaClient({});
-    await lambda.send(new InvokeCommand({ FunctionName: process.env.FLEET_FUNCTION, InvocationType: 'Event' }));
-  }
+  // Don't make the room wait for the next browser tick.
+  if (kick) after(tick({ force: true }));
   return json(200, c satisfies LiveControl);
 }
 
 const clampInt = (v: unknown, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(Number(v) || lo)));
 
-/** CloudWatch series for the Cloud X-Ray, plus the live queue depth straight from SQS. */
+/** Counter series for the Cloud X-Ray, plus the inbox and dead-letter depth read live. */
 async function metrics() {
-  const fn = (name: string | undefined) => (name ? [{ Name: 'FunctionName', Value: name }] : []);
-  const q = (id: string, ns: string, metric: string, stat: string, dims: { Name: string; Value: string }[]): MetricDataQuery => ({
-    Id: id,
-    MetricStat: { Metric: { Namespace: ns, MetricName: metric, Dimensions: dims }, Period: 60, Stat: stat },
-    ReturnData: true,
-  });
-  const queue = [{ Name: 'QueueName', Value: process.env.QUEUE_NAME ?? '' }];
-  const queries: MetricDataQuery[] = [
-    q('ruleMatches', 'AWS/IoT', 'TopicMatch', 'Sum', [{ Name: 'RuleName', Value: process.env.RULE_NAME ?? '' }]),
-    q('iotInMqtt', 'AWS/IoT', 'PublishIn.Success', 'Sum', [{ Name: 'Protocol', Value: 'MQTT' }]),
-    q('iotInHttp', 'AWS/IoT', 'PublishIn.Success', 'Sum', [{ Name: 'Protocol', Value: 'HTTP' }]),
-    q('sqsSent', 'AWS/SQS', 'NumberOfMessagesSent', 'Sum', queue),
-    q('sqsDepth', 'AWS/SQS', 'ApproximateNumberOfMessagesVisible', 'Maximum', queue),
-    q('sqsAge', 'AWS/SQS', 'ApproximateAgeOfOldestMessage', 'Maximum', queue),
-    q('ingestInv', 'AWS/Lambda', 'Invocations', 'Sum', fn(process.env.INGEST_FUNCTION)),
-    q('ingestDur', 'AWS/Lambda', 'Duration', 'Average', fn(process.env.INGEST_FUNCTION)),
-    q('ingestErr', 'AWS/Lambda', 'Errors', 'Sum', fn(process.env.INGEST_FUNCTION)),
-    q('ingestThr', 'AWS/Lambda', 'Throttles', 'Sum', fn(process.env.INGEST_FUNCTION)),
-    q('ingestConc', 'AWS/Lambda', 'ConcurrentExecutions', 'Maximum', fn(process.env.INGEST_FUNCTION)),
-    q('fleetInv', 'AWS/Lambda', 'Invocations', 'Sum', fn(process.env.FLEET_FUNCTION)),
-    q('apiInv', 'AWS/Lambda', 'Invocations', 'Sum', fn(process.env.AWS_LAMBDA_FUNCTION_NAME)),
-    q('binsWcu', 'AWS/DynamoDB', 'ConsumedWriteCapacityUnits', 'Sum', [{ Name: 'TableName', Value: env.binsTable }]),
-    q('readingsWcu', 'AWS/DynamoDB', 'ConsumedWriteCapacityUnits', 'Sum', [{ Name: 'TableName', Value: env.readingsTable }]),
-  ];
-  cw ??= new CloudWatchClient({});
-  sqs ??= new SQSClient({});
-  const end = new Date();
-  const start = new Date(end.getTime() - 20 * 60_000);
-  const [data, live, dlq] = await Promise.all([
-    cw.send(new GetMetricDataCommand({ MetricDataQueries: queries, StartTime: start, EndTime: end, ScanBy: 'TimestampAscending' })),
-    sqs.send(new GetQueueAttributesCommand({ QueueUrl: process.env.QUEUE_URL, AttributeNames: ['ApproximateNumberOfMessages', 'ApproximateNumberOfMessagesNotVisible'] })),
-    process.env.DLQ_URL
-      ? sqs.send(new GetQueueAttributesCommand({ QueueUrl: process.env.DLQ_URL, AttributeNames: ['ApproximateNumberOfMessages'] }))
-      : Promise.resolve(undefined),
-  ]);
-  const series: Record<string, { t: number[]; v: number[] }> = {};
-  for (const r of data.MetricDataResults ?? []) {
-    series[r.Id!] = { t: (r.Timestamps ?? []).map((d) => d.getTime()), v: r.Values ?? [] };
-  }
-  return {
-    now: end.getTime(),
-    series,
-    queue: {
-      visible: Number(live.Attributes?.ApproximateNumberOfMessages ?? 0),
-      inFlight: Number(live.Attributes?.ApproximateNumberOfMessagesNotVisible ?? 0),
-      dlq: Number(dlq?.Attributes?.ApproximateNumberOfMessages ?? 0),
-    },
-  };
+  const col = await db();
+  const now = Date.now();
+  const [s, inbox, dead] = await Promise.all([series(now), col.inbox.countDocuments({ city: env.city }), col.deadLetters.countDocuments({ city: env.city })]);
+  return { now, series: s, queue: { visible: inbox, inFlight: 0, dlq: dead } };
 }

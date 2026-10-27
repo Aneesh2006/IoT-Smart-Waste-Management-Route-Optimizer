@@ -1,6 +1,6 @@
 /**
- * The contract between the cloud (Lambdas) and the browser in Live mode:
- * MQTT topics, message shapes, and the deterministic wall-clock → sim-clock map.
+ * The contract between the cloud (Vercel functions) and the browser in Live mode:
+ * pub/sub topics, message shapes, and the deterministic wall-clock → sim-clock map.
  */
 import { hashString } from './rng.ts';
 import type { PolicyId } from './policies.ts';
@@ -8,26 +8,32 @@ import type { ChaosEvent, Metrics, Simulation, TruckStatus } from './sim.ts';
 import type { City } from './types.ts';
 
 export const topics = {
-  /** Devices publish here; the IoT rule listens on telemetryFilter. */
+  /** A device's readings (devices POST them to /api/ingest; the topic names the bin in docs and the inspector). */
   telemetry: (city: string, binId: string) => `binsight/${city}/bins/${binId}/telemetry`,
-  telemetryFilter: 'binsight/+/bins/+/telemetry',
-  /** Ingest Lambda → browsers: bin readings after they have been through the pipeline. */
+  /** Ingest → browsers: bin readings after they have been through the pipeline. */
   state: (city: string) => `binsight/${city}/state`,
-  /** Virtual fleet → browsers: sim clock, trucks, chaos state (twice a second). */
+  /** Virtual fleet → browsers: sim clock, trucks, chaos state (every fleet tick). */
   fleet: (city: string) => `binsight/${city}/fleet`,
-  /** Virtual fleet → browsers: route polylines, retained so late joiners get them. */
+  /** Virtual fleet → browsers: route polylines (late joiners get them from /api/state). */
   routes: (city: string) => `binsight/${city}/routes`,
   /** Virtual fleet → browsers: narrated simulation events. */
   events: (city: string) => `binsight/${city}/events`,
-  /** Ingest Lambda → browsers: fires, overflows, phone dispatches. */
+  /** Ingest → browsers: fires, overflows, phone dispatches. */
   alerts: (city: string) => `binsight/${city}/alerts`,
   /** Cloud → one phone. */
   phoneCmd: (city: string, phoneId: string) => `binsight/${city}/phones/${phoneId}/cmd`,
 };
 
+/**
+ * The Ably channel for a topic. Same logical name, with the "binsight" prefix as
+ * an Ably namespace so a token can grant `binsight:*` (Ably wildcards only work
+ * after a namespace).
+ */
+export const channelName = (topic: string) => topic.replace(/^binsight\//, 'binsight:');
+
 /** One sensor reading, as a device publishes it. */
 export interface Telemetry {
-  /** Fleet bins are their numeric id as a string; phones are "p-" + their Cognito identity. */
+  /** Fleet bins are their numeric id as a string; phones are "p-" + the id the server signed for them. */
   id: string;
   kind: 'fleet' | 'phone';
   /** Fill fraction 0–1.3. */
@@ -49,10 +55,10 @@ export interface Telemetry {
   score?: number;
 }
 
-/** What the IoT rule adds before handing the message to SQS. */
-export interface RuleMessage extends Telemetry {
+/** A reading as the ingest function sees it: which city, and when the function received it. */
+export interface IngestMessage extends Telemetry {
   city: string;
-  tRule: number;
+  tReceived: number;
 }
 
 export type BinStatus = 'ok' | 'filling' | 'critical' | 'overflow' | 'fire' | 'offline';
@@ -66,13 +72,15 @@ export function binStatus(t: Pick<Telemetry, 'r' | 'ok' | 'temp'>): BinStatus {
   return 'ok';
 }
 
-/** Timestamps (epoch ms) of one message at each hop through AWS. */
+/** Timestamps (epoch ms, server clock) of one message at each hop through the pipeline. */
 export interface Hops {
+  /** The device stamped the reading. */
   tDevice: number;
-  tRule: number;
-  tQueue: number;
-  tLambda: number;
+  /** The ingest function received it. */
+  tReceived: number;
+  /** MongoDB acknowledged the writes. */
   tStored: number;
+  /** Handed to Ably for the browsers. */
   tPublish: number;
 }
 
@@ -146,7 +154,7 @@ export interface PhoneCommand {
   text?: string;
 }
 
-/** The single control record per city, in DynamoDB. */
+/** The single control record per city, in MongoDB. */
 export interface LiveControl {
   city: string;
   seed: string;

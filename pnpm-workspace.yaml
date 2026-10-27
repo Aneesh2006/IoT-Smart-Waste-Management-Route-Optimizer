@@ -3,6 +3,8 @@ packages:
   - packages/*
   - services
 
-# esbuild bundles the API for Vercel; its install script fetches the native binary.
 allowBuilds:
+  # esbuild bundles the API for Vercel; its install script fetches the native binary.
   esbuild: true
+  # Tests download mongod on first use instead of at install time.
+  mongodb-memory-server: false
