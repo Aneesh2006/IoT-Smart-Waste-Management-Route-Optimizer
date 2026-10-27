@@ -2,7 +2,7 @@ node_modules/
 dist/
 .vite/
 coverage/
-cdk.out/
+.vercel/
 *.log
 .env
 .env.*
@@ -10,4 +10,3 @@ cdk.out/
 .DS_Store
 Thumbs.db
 .claude/
-apps/web/public/live-config*.json

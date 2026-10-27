@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/[route].js": { "maxDuration": 60 }
+  },
+  "rewrites": [{ "source": "/((?!api/|assets/).*)", "destination": "/index.html" }],
+  "headers": [
+    { "source": "/sw.js", "headers": [{ "key": "cache-control", "value": "no-cache" }] },
+    { "source": "/index.html", "headers": [{ "key": "cache-control", "value": "no-cache" }] },
+    { "source": "/assets/(.*)", "headers": [{ "key": "cache-control", "value": "public, max-age=31536000, immutable" }] }
+  ],
+  "crons": [{ "path": "/api/cron", "schedule": "0 5 * * *" }]
+}
