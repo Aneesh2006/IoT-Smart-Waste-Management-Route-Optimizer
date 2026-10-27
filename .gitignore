@@ -3,6 +3,8 @@ dist/
 .vite/
 coverage/
 .vercel/
+# Left behind by the AWS version (aws-version tag) on machines that deployed it.
+cdk.out/
 *.log
 .env
 .env.*
