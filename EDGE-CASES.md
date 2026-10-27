@@ -10,6 +10,22 @@ Edge cases are the unusual situations that break naive code: bad input, missing 
 
 **Scope:** this list covers what can go wrong in the code that exists. It leaves out "what if we added feature X", hardware failures outside the simulation, and general AWS outages.
 
+> **Vercel + MongoDB branch.** The tables below were written for the AWS version (kept at the `aws-version` tag). On this branch the same cases are handled as follows; where an entry names an AWS service, read it through this map.
+>
+> | AWS entry | Now |
+> | --- | --- |
+> | DynamoDB conditional writes (P2), batch-write retries (P1) | MongoDB upserts filtered on `tDevice`, the unique `(city, bin)` index rejecting stale ones; unordered bulk writes with duplicate keys ignored; a failed batch goes to the `inbox` collection and is retried with backoff |
+> | SQS buffer, DLQ after 3 tries, "pause ingest" | `inbox` collection drained by the fleet tick; `deadLetters` after 3 tries; paused readings wait in the inbox |
+> | Phone row TTL (P9g), readings TTL | MongoDB TTL indexes on `expiresAt` |
+> | IAM topic restriction (phone spoofing, other city P9f) | Phones get a signed id from `/api/phone`; ingest takes the id from the token and the city from the deployment, and refuses fleet ids |
+> | Cognito authorizer on control | Signed HttpOnly operator cookie checked by `/api/control` |
+> | Guest MQTT flood (P4) | Per-instance limit of 10 readings/s per phone; still no global limit ⚠️ |
+> | Fleet Lambda lease, crash, timeout (section 7) | Lazy tick under a MongoDB lease (15 s) with a 1 s minimum interval; a crashed tick leaves its marks unchanged and the next one redoes it; replay is deterministic |
+> | Retained routes for late joiners | Routes stored with the fleet state and returned by `/api/state` |
+> | Pause at each minute boundary (P9h) | Gone; frames now come about once a second while anyone is watching |
+>
+> Tests: [services/test/api.test.ts](services/test/api.test.ts) runs these against a real MongoDB.
+
 ---
 
 ## Fix round: what was resolved
