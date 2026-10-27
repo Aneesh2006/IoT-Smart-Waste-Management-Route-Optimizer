@@ -62,6 +62,29 @@ export function latestPerBin(items: Incoming[]): Incoming[] {
   return [...best.values()];
 }
 
+/**
+ * DynamoDB update that sets every field of `item` except the keys, but only if it
+ * is newer than what is stored (two ingest runs can deliver out of order). An
+ * update, not a put, so fields like fireAlertAt survive.
+ */
+export function latestUpdate(item: Record<string, unknown>) {
+  const names: Record<string, string> = { '#t': 'tDevice' };
+  const values: Record<string, unknown> = { ':t': item.tDevice };
+  const sets: string[] = [];
+  Object.entries(item).forEach(([k, v], n) => {
+    if (k === 'city' || k === 'bin' || v === undefined) return;
+    names[`#a${n}`] = k;
+    values[`:a${n}`] = v;
+    sets.push(`#a${n} = :a${n}`);
+  });
+  return {
+    UpdateExpression: `SET ${sets.join(', ')}`,
+    ConditionExpression: 'attribute_not_exists(#t) OR #t <= :t',
+    ExpressionAttributeNames: names,
+    ExpressionAttributeValues: values,
+  };
+}
+
 export function withStatus(t: Telemetry): Telemetry & { status: BinStatus } {
   return { ...t, status: binStatus(t) };
 }

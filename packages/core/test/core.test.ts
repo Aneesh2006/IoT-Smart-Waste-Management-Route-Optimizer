@@ -153,6 +153,26 @@ describe('simulation', () => {
       for (const t of sim.trucks) expect(t.load).toBeLessThanOrEqual(t.capacity + 1e-6);
     }
   });
+
+  it('a full truck leaves bins for the next plan instead of counting empty visits', () => {
+    // Small trucks and a festival the forecast didn't expect: trucks fill up mid-trip.
+    const sim = new Simulation({ seed: 'full', policy: 'fixed', truckCapacityL: 2000, events: [{ at: 5.5 * 3600, kind: 'festival' }] });
+    for (let k = 0; k < 2 * 24 * 60; k++) {
+      sim.advance(60);
+      for (const p of sim.pickups) expect(p.litres).toBeGreaterThan(0);
+    }
+    expect(sim.events.some((e) => e.text.includes('is full'))).toBe(true);
+  });
+
+  it('plans a missed shift as soon as a truck is back', () => {
+    const sim = new Simulation({ seed: 'busy', bins: 40, trucks: 1, policy: 'threshold', threshold: 0.4 });
+    sim.trucks[0].status = 'driving'; // still out from the night before
+    sim.advance(1.5 * 3600); // 6:30, past the morning shift start
+    expect(sim.lastPlan).toBeNull();
+    sim.trucks[0].status = 'idle';
+    sim.advance(60);
+    expect(sim.lastPlan?.shift).toBe(0);
+  });
 });
 
 describe('algorithm lab', () => {

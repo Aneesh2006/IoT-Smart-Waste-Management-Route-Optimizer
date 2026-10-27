@@ -295,6 +295,8 @@ export class Simulation {
   /** Sim time a festival ends (0 when none is on), for the renderer. */
   festivalUntil = 0;
   private boosts: { district: DistrictKind; factor: number; until: number }[] = [];
+  /** A shift that started while every truck was out, or -1; planned when one is back. */
+  private missedShift = -1;
   private sensorRepairs: { bins: number[]; at: number }[] = [];
   private pending: ChaosEvent[];
   private pendingPolicies: { at: number; policy: PolicyId }[];
@@ -492,6 +494,10 @@ export class Simulation {
       const b = a + h;
       if (a < start && b >= start) this.planShift(k);
     }
+    if (this.missedShift >= 0) {
+      if (this.shiftAt(t1) !== this.missedShift) this.missedShift = -1;
+      else if (this.trucks.some((t) => t.status === 'idle')) this.planShift(this.missedShift);
+    }
     while (this.pendingPolicies.length && this.pendingPolicies[0].at <= t1) this.setPolicy(this.pendingPolicies.shift()!.policy);
     while (this.pending.length && this.pending[0].at <= t1) this.applyChaos(this.pending.shift()!.kind);
     if (Math.floor(t1 / 60) !== Math.floor(t0 / 60)) this.expireChaos();
@@ -588,9 +594,11 @@ export class Simulation {
 
   private planShift(shift: number) {
     if (!this.trucks.some((t) => t.status === 'idle')) {
-      this.log('warn', 'Shift start: every truck is still out, nothing planned.');
+      this.missedShift = shift;
+      this.log('warn', 'Shift start: every truck is still out; planning as soon as one is back.');
       return;
     }
+    this.missedShift = -1;
     this.plan(shift, this.policy.select(this.policyContext(shift)), 'shift');
   }
 
@@ -777,6 +785,12 @@ export class Simulation {
     if (stop.kind === 'bin' && stop.binId !== undefined) {
       const b = this.bins[stop.binId];
       const site = this.city.bins[stop.binId];
+      // A full truck can take nothing: hand the bin back to the planner rather than count an empty visit.
+      if (t.capacity - t.load < 1) {
+        b.assigned = -1;
+        this.log('warn', `${t.name} is full; ${site.label} goes back on the list.`, { binId: b.id, truckId: t.id });
+        return;
+      }
       const litres = Math.min(b.fill * site.capacityL, t.capacity - t.load);
       if (b.fill < this.config.costs.wastedBelow) this.metrics.wastedVisits++;
       this.pickups.push({ id: this.pickupId++, binId: b.id, truckId: t.id, litres, time: this.time, wasted: b.fill < this.config.costs.wastedBelow });
@@ -836,6 +850,8 @@ export class Simulation {
     const r = this.rChaos;
     switch (kind) {
       case 'festival': {
+        // A second festival extends the first instead of multiplying it again.
+        this.boosts = [];
         this.boosts.push({ district: 'market', factor: 3.2, until: this.time + 10 * HOUR });
         this.festivalUntil = this.time + 10 * HOUR;
         this.boosts.push({ district: 'park', factor: 2, until: this.time + 10 * HOUR });
@@ -889,7 +905,9 @@ export class Simulation {
       }
       case 'fire': {
         const candidates = this.bins.filter((b) => !this.fires.has(b.id) && b.fill > 0.4 && this.city.bins[b.id].stream === 'wet');
-        const b = candidates.length ? r.pick(candidates) : r.pick(this.bins);
+        const pool = candidates.length ? candidates : this.bins.filter((x) => !this.fires.has(x.id));
+        if (!pool.length) break;
+        const b = r.pick(pool);
         this.fires.set(b.id, this.time + 3 * HOUR);
         const site = this.city.bins[b.id];
         b.temperature = 85;
@@ -912,6 +930,7 @@ export class Simulation {
       if (until > now) continue;
       this.fires.delete(id);
       this.bins[id].fill *= 0.6;
+      if (this.bins[id].fill < 1) this.bins[id].overflowing = false;
       this.log('info', `${this.city.bins[id].label}: fire burnt itself out.`, { binId: id });
     }
     const open = this.closures.filter((c) => c.until <= now);
@@ -926,12 +945,18 @@ export class Simulation {
       for (const id of rep.bins) {
         this.bins[id].sensorOk = true;
         this.bins[id].battery = 100;
+        // Its start-of-hour reading is a day old: don't learn from the first hour back.
+        this.bins[id].collectedThisHour = true;
       }
       this.log('info', `Technician replaced ${rep.bins.length} dead sensors.`);
     }
     this.sensorRepairs = this.sensorRepairs.filter((x) => x.at > now);
     for (const t of this.trucks) {
       if (t.status !== 'broken' || t.brokenUntil > now) continue;
+      // The tow truck delivers its load to the transfer station.
+      const wetShare = this.estimateWetShare(t);
+      this.metrics.tippedWetL += t.load * wetShare;
+      this.metrics.tippedDryL += t.load * (1 - wetShare);
       t.status = 'idle';
       t.route = null;
       t.load = 0;

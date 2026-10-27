@@ -100,7 +100,7 @@ function configFromUrl(): { config: Partial<SimConfig>; speed?: number } {
     config: {
       seed: q.get('seed') ?? undefined,
       policy: policy && POLICY_ORDER.includes(policy) ? policy : undefined,
-      threshold: num('threshold'),
+      threshold: num('threshold') !== undefined ? Math.min(0.95, Math.max(0.4, num('threshold')!)) : undefined,
       trucks: num('trucks') !== undefined ? Math.min(8, Math.max(1, num('trucks')!)) : undefined,
       bins: num('bins') !== undefined ? Math.min(400, Math.max(20, num('bins')!)) : undefined,
       construction: solver === 'nearest' || solver === 'savings' ? solver : undefined,

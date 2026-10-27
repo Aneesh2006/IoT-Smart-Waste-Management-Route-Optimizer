@@ -1,7 +1,8 @@
-import { customPolicyCode, validateCustomPolicy, type ValidationReport } from '@binsight/core';
+import { customPolicyCode, installCustomPolicy, type ValidationReport } from '@binsight/core';
 import { AlertTriangle, CheckCircle2, Code2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useApp } from '../state/store.ts';
+import type { CompareRequest } from '../workers/compare.worker.ts';
 import { IconButton, Panel } from './ui.tsx';
 
 const TEMPLATE = `// The body of select(ctx): return the ids of the bins to collect this shift.
@@ -58,16 +59,24 @@ function Editor() {
 
   const validate = () => {
     setBusy(true);
-    // Let the button repaint before the (synchronous) test run.
-    setTimeout(() => {
-      const r = validateCustomPolicy(code);
+    // The test run happens in a worker with a time limit, so a policy that never returns can't freeze the city.
+    const worker = new Worker(new URL('../workers/compare.worker.ts', import.meta.url), { type: 'module' });
+    const done = (r: ValidationReport) => {
+      window.clearTimeout(timer);
+      worker.terminate();
       setReport(r);
       setBusy(false);
-      if (r.ok) {
+      if (r.ok && installCustomPolicy(code).ok) {
         setPolicy('custom');
         bump();
       }
-    }, 20);
+    };
+    const timer = window.setTimeout(() => done({ ok: false, errors: ['Still running after 10 s: does it loop forever?'], warnings: [] }), 10_000);
+    worker.onmessage = (e: MessageEvent<{ type: string; report: ValidationReport }>) => {
+      if (e.data.type === 'validated') done(e.data.report);
+    };
+    worker.onerror = (e) => done({ ok: false, errors: [e.message], warnings: [] });
+    worker.postMessage({ validate: code } satisfies CompareRequest);
   };
 
   const km = (m: number) => `${(m / 1000).toFixed(1)} km`;

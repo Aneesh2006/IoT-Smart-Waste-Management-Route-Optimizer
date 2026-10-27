@@ -3,6 +3,8 @@ import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as budgets from 'aws-cdk-lib/aws-budgets';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cwActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -52,6 +54,8 @@ export class BinSightStack extends Stack {
     const bins = new dynamodb.TableV2(this, 'Bins', {
       partitionKey: { name: 'city', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'bin', type: dynamodb.AttributeType.STRING },
+      // Only phone rows set it: a phone that left is gone a day later.
+      timeToLiveAttribute: 'expires',
       removalPolicy: RemovalPolicy.DESTROY,
     });
     const readings = new dynamodb.TableV2(this, 'Readings', {
@@ -75,6 +79,18 @@ export class BinSightStack extends Stack {
 
     const alerts = new sns.Topic(this, 'Alerts', { displayName: 'BinSight alerts' });
     if (props.alertEmail) alerts.addSubscription(new subs.EmailSubscription(props.alertEmail));
+
+    // A reading that failed three times is parked in the DLQ: say so (redrive it from the SQS console).
+    dlq
+      .metricApproximateNumberOfMessagesVisible({ period: Duration.minutes(5) })
+      .createAlarm(this, 'DlqNotEmpty', {
+        alarmDescription: 'BinSight readings are failing to ingest and waiting in the dead-letter queue.',
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      })
+      .addAlarmAction(new cwActions.SnsAction(alerts));
 
     // ---------------------------------------------------------------- IoT Core
     // The account's MQTT endpoint is only known at deploy time.
@@ -208,7 +224,7 @@ export class BinSightStack extends Stack {
     guestRole.addToPolicy(new iam.PolicyStatement({ actions: ['iot:Connect'], resources: [iotArn('client', `${sub}-*`)] }));
     guestRole.addToPolicy(new iam.PolicyStatement({ actions: ['iot:Subscribe'], resources: [iotArn('topicfilter', 'binsight/*')] }));
     guestRole.addToPolicy(new iam.PolicyStatement({ actions: ['iot:Receive'], resources: [iotArn('topic', 'binsight/*')] }));
-    guestRole.addToPolicy(new iam.PolicyStatement({ actions: ['iot:Publish'], resources: [iotArn('topic', `binsight/*/bins/p-${sub}/telemetry`)] }));
+    guestRole.addToPolicy(new iam.PolicyStatement({ actions: ['iot:Publish'], resources: [iotArn('topic', `binsight/${city}/bins/p-${sub}/telemetry`)] }));
     new cognito.CfnIdentityPoolRoleAttachment(this, 'GuestRoles', { identityPoolId: guests.ref, roles: { unauthenticated: guestRole.roleArn } });
 
     // ---------------------------------------------------------------- HTTP API

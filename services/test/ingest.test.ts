@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { latestPerBin, oldestHops, parseMessage, truckFor, withStatus } from '../src/ingest-logic.ts';
+import { latestPerBin, latestUpdate, oldestHops, parseMessage, truckFor, withStatus } from '../src/ingest-logic.ts';
 
 const body = (o: Record<string, unknown>) => JSON.stringify({ city: 'demo', binId: '7', r: 0.5, ok: true, temp: 30, gas: 40, bat: 90, tDevice: Date.now(), tRule: Date.now(), ...o });
 
@@ -36,5 +36,13 @@ describe('ingest logic', () => {
     expect(withStatus(parseMessage(body({ r: 1.1 }))!).status).toBe('overflow');
     expect(withStatus(parseMessage(body({ ok: false }))!).status).toBe('offline');
     expect(truckFor('p-abc')).toMatch(/^Truck [1-4]$/);
+  });
+
+  it('updates the latest state only when newer, leaving keys and other fields alone', () => {
+    const u = latestUpdate({ city: 'demo', bin: '7', r: 0.5, tDevice: 100, nick: undefined });
+    expect(u.ConditionExpression).toBe('attribute_not_exists(#t) OR #t <= :t');
+    expect(u.ExpressionAttributeValues[':t']).toBe(100);
+    const setNames = u.UpdateExpression.match(/#a\d+/g)!.map((n) => u.ExpressionAttributeNames[n]);
+    expect(setNames).toEqual(['r', 'tDevice']);
   });
 });

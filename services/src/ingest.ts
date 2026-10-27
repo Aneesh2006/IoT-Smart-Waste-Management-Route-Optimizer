@@ -1,18 +1,19 @@
 import { PublishCommand as SnsPublish, SNSClient } from '@aws-sdk/client-sns';
-import { BatchWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchWriteCommand, UpdateCommand, type BatchWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 import { topics, type Alert, type PhoneCommand, type StateUpdate } from '@binsight/core';
 import type { SQSHandler } from 'aws-lambda';
 import {
   DISPATCH_STALE_MS,
   PHONE_DISPATCH_AT,
   latestPerBin,
+  latestUpdate,
   oldestHops,
   parseMessage,
   truckFor,
   withStatus,
   type Incoming,
 } from './ingest-logic.ts';
-import { ddb, env, pool, publish } from './shared.ts';
+import { ddb, env, pool, publish, sleep } from './shared.ts';
 
 /**
  * SQS → this function → DynamoDB → MQTT. Every sensor reading in the city passes
@@ -40,20 +41,16 @@ export const handler: SQSHandler = async (event) => {
     const phones = items.filter((i) => i.msg.kind === 'phone');
     const expires = Math.floor(tLambda / 1000) + READING_TTL_S;
 
-    // Latest state + history rows, 25 items per batch write.
-    const writes = [
-      ...fleet.map((i) => ({ table: env.binsTable, item: binItem(i, tLambda) })),
-      ...incoming
-        .filter((i) => i.msg.city === city)
-        .map((i) => ({ table: env.readingsTable, item: { bin: `${city}#${i.msg.id}`, t: i.msg.tDevice, r: i.msg.r, temp: i.msg.temp, gas: i.msg.gas, expires } })),
-    ];
-    const chunks: (typeof writes)[] = [];
-    for (let k = 0; k < writes.length; k += 25) chunks.push(writes.slice(k, k + 25));
-    await pool(chunks, 4, (chunk) => {
-      const RequestItems: Record<string, { PutRequest: { Item: Record<string, unknown> } }[]> = {};
-      for (const w of chunk) (RequestItems[w.table] ??= []).push({ PutRequest: { Item: w.item } });
-      return ddb().send(new BatchWriteCommand({ RequestItems }));
-    });
+    // Latest state per fleet bin, newer readings only.
+    await pool(fleet, 4, (i) => saveLatest(i, tLambda));
+
+    // History rows, 25 per batch write.
+    const rows = incoming
+      .filter((i) => i.msg.city === city)
+      .map((i) => ({ PutRequest: { Item: { bin: `${city}#${i.msg.id}`, t: i.msg.tDevice, r: i.msg.r, temp: i.msg.temp, gas: i.msg.gas, expires } } }));
+    const chunks: (typeof rows)[] = [];
+    for (let k = 0; k < rows.length; k += 25) chunks.push(rows.slice(k, k + 25));
+    await pool(chunks, 4, (chunk) => batchWrite({ [env.readingsTable]: chunk }));
 
     // Phones are few: update them one by one so we can see what changed.
     const alerts: Alert[] = [];
@@ -83,6 +80,24 @@ function binItem(i: Incoming, now: number) {
   return { city: i.msg.city, bin: i.msg.id, ...m, lastSeen: now, tQueue: i.tQueue };
 }
 
+async function saveLatest(i: Incoming, now: number) {
+  try {
+    await ddb().send(new UpdateCommand({ TableName: env.binsTable, Key: { city: i.msg.city, bin: i.msg.id }, ...latestUpdate(binItem(i, now)) }));
+  } catch (e) {
+    // A newer reading is already stored.
+    if ((e as Error).name !== 'ConditionalCheckFailedException') throw e;
+  }
+}
+
+/** Batch write, retrying whatever DynamoDB throttled; throws if it never gets through, so SQS redelivers. */
+async function batchWrite(RequestItems: BatchWriteCommandInput['RequestItems']) {
+  for (let attempt = 0; RequestItems && Object.keys(RequestItems).length; attempt++) {
+    if (attempt === 5) throw new Error('DynamoDB kept throttling a batch write');
+    if (attempt) await sleep(50 * 2 ** attempt);
+    RequestItems = (await ddb().send(new BatchWriteCommand({ RequestItems }))).UnprocessedItems;
+  }
+}
+
 const label = (i: Incoming) => (i.msg.kind === 'phone' ? `${i.msg.emoji ?? ''} ${i.msg.nick ?? 'phone'}`.trim() : `#${i.msg.id}`);
 
 async function handlePhone(city: string, i: Incoming, now: number): Promise<Alert[]> {
@@ -91,7 +106,9 @@ async function handlePhone(city: string, i: Incoming, now: number): Promise<Aler
       TableName: env.binsTable,
       Key: { city, bin: i.msg.id },
       UpdateExpression:
-        'SET kind = :k, r = :r, ok = :ok, temp = :temp, gas = :gas, bat = :bat, tDevice = :td, lastSeen = :now, nick = :nick, emoji = :emoji, #st = :st, score = :score',
+        'SET kind = :k, r = :r, ok = :ok, temp = :temp, gas = :gas, bat = :bat, tDevice = :td, lastSeen = :now, nick = :nick, emoji = :emoji, #st = :st, score = :score, expires = :exp',
+      // Newer readings only; a phone that leaves is deleted by TTL a day later.
+      ConditionExpression: 'attribute_not_exists(tDevice) OR tDevice <= :td',
       ExpressionAttributeNames: { '#st': 'status' },
       ExpressionAttributeValues: {
         ':k': 'phone',
@@ -106,10 +123,15 @@ async function handlePhone(city: string, i: Incoming, now: number): Promise<Aler
         ':emoji': i.msg.emoji ?? '🗑️',
         ':st': withStatus(i.msg).status,
         ':score': i.msg.score ?? 0,
+        ':exp': Math.floor(now / 1000) + 24 * 3600,
       },
       ReturnValues: 'ALL_OLD',
     }),
-  );
+  ).catch((e: Error) => {
+    if (e.name === 'ConditionalCheckFailedException') return null;
+    throw e;
+  });
+  if (!res) return [];
   const old = res.Attributes as { dispatchAt?: number } | undefined;
   const alerts: Alert[] = [];
   const who = label(i);

@@ -42,8 +42,14 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
         return json(200, await state());
       case 'GET /metrics':
         return json(200, await metrics());
-      case 'POST /control':
-        return await control(event.body ? JSON.parse(event.body) : {});
+      case 'POST /control': {
+        let body: unknown = null;
+        try {
+          body = JSON.parse(event.body || '{}');
+        } catch {}
+        if (typeof body !== 'object' || body === null) return json(400, { error: 'Body must be a JSON object' });
+        return await control(body as ControlBody);
+      }
       default:
         return json(404, { error: `No route ${route}` });
     }

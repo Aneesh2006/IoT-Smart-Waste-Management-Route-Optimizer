@@ -126,10 +126,26 @@ function World() {
   );
 }
 
+// three.js needs WebGL 2; without it the canvas would just stay blank.
+const hasWebGL2 = (() => {
+  try {
+    return !!document.createElement('canvas').getContext('webgl2');
+  } catch {
+    return false;
+  }
+})();
+
 export function CityCanvas() {
   const sim = useApp((s) => s.sim);
   const quality = useApp((s) => s.quality);
   const high = quality === 'high';
+  if (!hasWebGL2) {
+    return (
+      <div role="alert" className="fixed inset-0 grid place-items-center p-6 text-center text-sm text-slate-300">
+        This browser can't draw the 3D city (WebGL 2 is off or unsupported). Try Chrome or Edge with hardware acceleration turned on.
+      </div>
+    );
+  }
   const { x0, x1, z0, z1 } = sim.city.bounds;
   const cx = (x0 + x1) / 2;
   const cz = (z0 + z1) / 2;
