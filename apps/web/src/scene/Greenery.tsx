@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { Color, CylinderGeometry, IcosahedronGeometry, MeshBasicMaterial, Object3D, SphereGeometry, type InstancedMesh } from 'three';
 import { nightUniform } from './Atmosphere.tsx';
+import { blockDelays, clamp01, delayAt, easeOutBack, TREE_IN, TREE_LAG, useIntro } from './intro.ts';
 
 /** Trees, plus the arterial street lamps that come on at dusk. */
 export function Greenery({ city }: { city: City }) {
@@ -55,6 +56,31 @@ export function Greenery({ city }: { city: City }) {
       m.current!.computeBoundingSphere();
     }
   }, [city]);
+
+  // Trees sprout once their block's buildings are on the way up.
+  const starts = useMemo(() => {
+    const delays = blockDelays(city);
+    return Float32Array.from(city.trees, (t) => delayAt(city, delays, t.x, t.z) + TREE_LAG);
+  }, [city]);
+  const o = useMemo(() => new Object3D(), []);
+  useIntro((time) => {
+    city.trees.forEach((t, i) => {
+      const p = clamp01((time - starts[i]) / TREE_IN);
+      const k = p === 0 ? 0 : easeOutBack(p);
+      o.rotation.set(0, 0, 0);
+      o.position.set(t.x, 0.6, t.z);
+      o.scale.set(t.scale * k, 4 * t.scale * k, t.scale * k);
+      o.updateMatrix();
+      trunks.current!.setMatrixAt(i, o.matrix);
+      o.position.set(t.x, 0.6 + 6.5 * t.scale * k, t.z);
+      o.scale.setScalar(4.2 * t.scale * k);
+      o.rotation.set(0, t.x * 0.37, 0);
+      o.updateMatrix();
+      crowns.current!.setMatrixAt(i, o.matrix);
+    });
+    trunks.current!.instanceMatrix.needsUpdate = true;
+    crowns.current!.instanceMatrix.needsUpdate = true;
+  });
 
   useFrame(() => {
     const n = nightUniform.value;

@@ -4,6 +4,7 @@ import { BoxGeometry, Color, MeshStandardMaterial, Object3D, type InstancedMesh 
 import { useApp } from '../state/store.ts';
 import { nightUniform } from './Atmosphere.tsx';
 import { PAD_HEIGHT } from './Ground.tsx';
+import { BUILDING_IN, BUILDING_LAG, blockDelays, clamp01, delayAt, easeOutBack, useIntro } from './intro.ts';
 
 const PALETTE: Record<DistrictKind, string[]> = {
   residential: ['#efe4d2', '#e8d5bf', '#f3ece0', '#dcc7b0', '#e9dccb', '#f0d9c4'],
@@ -113,6 +114,27 @@ export function Buildings({ city }: { city: City }) {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
   }, [city]);
+
+  // Buildings rise out of their block just after the pad lands.
+  const starts = useMemo(() => {
+    const delays = blockDelays(city);
+    return Float32Array.from(city.buildings, (b) => delayAt(city, delays, b.x, b.z) + BUILDING_LAG);
+  }, [city]);
+  const o = useMemo(() => new Object3D(), []);
+  useIntro((t) => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    city.buildings.forEach((b, i) => {
+      const p = clamp01((t - starts[i]) / BUILDING_IN);
+      const k = p === 0 ? 0 : easeOutBack(p);
+      const g = p === 0 ? 0 : Math.min(1, 0.6 + p);
+      o.position.set(b.x, PAD_HEIGHT, b.z);
+      o.scale.set(b.w * g, b.h * k, b.d * g);
+      o.updateMatrix();
+      mesh.setMatrixAt(i, o.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  });
 
   return <instancedMesh ref={ref} args={[geometry, material, city.buildings.length]} castShadow={!dataView} receiveShadow />;
 }
