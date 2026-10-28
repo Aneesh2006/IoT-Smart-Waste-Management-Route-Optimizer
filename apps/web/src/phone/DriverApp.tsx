@@ -172,7 +172,7 @@ function Crew({ feed, truckId, setTruckId }: { feed: Feed; truckId: number; setT
         <div className="mt-2 text-[12px] text-slate-400">{binsLeft} bins left on this run</div>
       </div>
 
-      <MiniMap city={feed.city} route={route} truck={t} color={color} />
+      <MiniMap city={feed.city} route={route} truck={t} color={color} stops={stops} si={si} />
 
       <div className="rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/10">
         <div className="mb-2 text-[12px] uppercase tracking-wider text-slate-500">Run sheet</div>
@@ -205,7 +205,21 @@ function Crew({ feed, truckId, setTruckId }: { feed: Feed; truckId: number; setT
   );
 }
 
-function MiniMap({ city, route, truck, color }: { city: City; route?: RoutesFrame['trucks'][number]; truck?: FleetFrame['trucks'][number]; color: string }) {
+function MiniMap({
+  city,
+  route,
+  truck,
+  color,
+  stops,
+  si,
+}: {
+  city: City;
+  route?: RoutesFrame['trucks'][number];
+  truck?: FleetFrame['trucks'][number];
+  color: string;
+  stops: RouteStopFrame[];
+  si: number;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const roads = useMemo(() => city.edges.map((e) => [city.nodes[e.a], city.nodes[e.b], e.arterial] as const), [city]);
   useEffect(() => {
@@ -237,6 +251,47 @@ function MiniMap({ city, route, truck, color }: { city: City; route?: RoutesFram
       for (const n of route.nodes) g.lineTo(px(city.nodes[n].x), pz(city.nodes[n].z));
       g.stroke();
     }
+    // Every bin in the city as a faint dot, so the crew can see what's around them.
+    g.fillStyle = 'rgba(148,163,184,0.35)';
+    for (const b of city.bins) {
+      g.beginPath();
+      g.arc(px(b.x), pz(b.z), 1.4, 0, Math.PI * 2);
+      g.fill();
+    }
+    // This run's bins: emptied ones greyed out, the rest as bin markers, the next stop ringed.
+    const at = (s: RouteStopFrame) => {
+      const b = s.binId !== undefined ? city.bins[s.binId] : undefined;
+      const n = city.nodes[s.node];
+      return b ? [px(b.x), pz(b.z)] : [px(n.x), pz(n.z)];
+    };
+    stops.forEach((s, i) => {
+      if (s.kind !== 'bin' || i === si) return;
+      const [x, y] = at(s);
+      const done = i < si;
+      g.fillStyle = done ? 'rgba(100,116,139,0.6)' : '#34d399';
+      g.strokeStyle = '#05070d';
+      g.lineWidth = 1.2;
+      g.beginPath();
+      g.roundRect(x - 3.5, y - 3.5, 7, 7, 1.5);
+      g.fill();
+      g.stroke();
+    });
+    const next = truck && truck.st !== 'idle' ? stops[si] : undefined;
+    if (next) {
+      const [x, y] = at(next);
+      g.fillStyle = next.kind === 'bin' ? '#34d399' : next.kind === 'unload' ? '#fbbf24' : '#7dd3fc';
+      g.strokeStyle = '#05070d';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.roundRect(x - 5, y - 5, 10, 10, 2);
+      g.fill();
+      g.stroke();
+      g.strokeStyle = '#fff';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.arc(x, y, 10, 0, Math.PI * 2);
+      g.stroke();
+    }
     if (truck) {
       g.fillStyle = '#fff';
       g.beginPath();
@@ -247,6 +302,24 @@ function MiniMap({ city, route, truck, color }: { city: City; route?: RoutesFram
       g.arc(px(truck.x), pz(truck.z), 4, 0, Math.PI * 2);
       g.fill();
     }
-  }, [city, roads, route, truck, color]);
-  return <canvas ref={ref} className="aspect-[4/3] w-full rounded-2xl bg-black/40 ring-1 ring-white/10" />;
+  }, [city, roads, route, truck, color, stops, si]);
+  return (
+    <div>
+      <canvas ref={ref} className="aspect-[4/3] w-full rounded-2xl bg-black/40 ring-1 ring-white/10" />
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11.5px] text-slate-400">
+        <span className="flex items-center gap-1.5">
+          <span className="size-3 rounded-full ring-[1.5px] ring-white" /> Next stop
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-2 rounded-sm bg-emerald-400" /> Bins to empty
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-2 rounded-sm bg-slate-500/60" /> Emptied
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-1 rounded-full bg-slate-400/50" /> Other bins
+        </span>
+      </div>
+    </div>
+  );
 }
