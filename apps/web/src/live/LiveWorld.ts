@@ -34,6 +34,38 @@ export interface PhoneBin {
   dispatched: boolean;
 }
 
+/**
+ * A truck sent to an audience phone's bin. The cloud only dispatches it to the
+ * phone (a countdown there); the big screen drives it out of the depot along the
+ * roads, parks it beside the bin until the phone reports the pickup, then drives
+ * it home.
+ */
+export interface PhoneRun {
+  phoneId: string;
+  /** Depot → the junction beside the bin. */
+  xs: number[];
+  zs: number[];
+  cum: number[];
+  length: number;
+  /** performance.now() stamps. */
+  leftAt: number;
+  arriveAt: number;
+  collectedAt?: number;
+  picked: boolean;
+  x: number;
+  z: number;
+  heading: number;
+}
+
+/** The phone counts down from the cloud's 20 s ETA; arrive just before it so the truck is waiting. */
+const PHONE_ETA_MS = 20_000;
+const PHONE_LOAD_MS = 1500;
+const PHONE_RETURN_MS = 12_000;
+/** Give up waiting for the phone's pickup (it left, or lost signal) and drive home. */
+const PHONE_GIVE_UP_MS = 20_000;
+
+const ease = (p: number) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
+
 /** One message's trip through the pipeline, with the browser's arrival stamped on (server clock). */
 export interface HopSample extends Hops {
   tBrowser: number;
@@ -57,6 +89,9 @@ export class LiveWorld extends Simulation {
   readonly live = true;
   control: LiveControl;
   phones = new Map<string, PhoneBin>();
+  phoneRuns = new Map<string, PhoneRun>();
+  /** Pickup bursts at phone bins, for PickupFx. */
+  phonePickups: { id: number; x: number; z: number; tx: number; tz: number }[] = [];
   hops: HopSample[] = [];
   /** Bumped whenever phones join, leave or change, for renderers. */
   phoneVersion = 0;
@@ -90,8 +125,9 @@ export class LiveWorld extends Simulation {
 
   /** Called every animation frame. Interpolates between the cloud's fleet frames. */
   override advance() {
-    if (!this.frameAt) return;
     const now = performance.now();
+    this.stepPhoneRuns(now);
+    if (!this.frameAt) return;
     this.time = this.frameSimT + Math.min((this.frameGap * 1.5) / 1000, (now - this.frameAt) / 1000) * this.speed;
     const a = Math.min(1, (now - this.frameAt) / this.frameGap);
     for (const n of this.next) {
@@ -123,8 +159,14 @@ export class LiveWorld extends Simulation {
   applySnapshot(items: Record<string, unknown>[]) {
     for (const it of items) {
       const t = it as unknown as Telemetry & { lastSeen?: number; dispatchAt?: number };
-      if (t.kind === 'phone') this.upsertPhone(t, Number(t.lastSeen) || Date.now(), Boolean(t.dispatchAt));
-      else this.applyBin(t);
+      if (t.kind !== 'phone') {
+        this.applyBin(t);
+        continue;
+      }
+      this.upsertPhone(t, Number(t.lastSeen) || Date.now(), Boolean(t.dispatchAt));
+      // Opened mid-dispatch: send the truck for whatever is left of the countdown.
+      const left = PHONE_ETA_MS - (Date.now() + this.clockOffset - Number(t.dispatchAt));
+      if (t.dispatchAt && left > 0) this.sendPhoneTruck(this.phones.get(t.id)!, left);
     }
   }
 
@@ -221,6 +263,8 @@ export class LiveWorld extends Simulation {
     const phone = this.phones.get(a.binId);
     if (phone && (a.kind === 'dispatch' || a.kind === 'collected')) {
       phone.dispatched = a.kind === 'dispatch';
+      if (a.kind === 'dispatch') this.sendPhoneTruck(phone, PHONE_ETA_MS);
+      else this.phoneCollected(phone.id);
       this.phoneVersion++;
     }
   }
@@ -285,7 +329,91 @@ export class LiveWorld extends Simulation {
       score: t.score ?? prev?.score ?? 0,
       dispatched: t.event === 'collected' ? false : (dispatched ?? prev?.dispatched ?? false),
     });
+    if (t.event === 'collected') this.phoneCollected(t.id);
     this.phoneVersion++;
+  }
+
+  private nextPhonePickup = 0;
+
+  private sendPhoneTruck(phone: PhoneBin, etaMs: number) {
+    // One truck per bin; a new dispatch while the last one heads home sends another.
+    const old = this.phoneRuns.get(phone.id);
+    if (old && old.collectedAt === undefined) return;
+    let stop = -1;
+    let best = Infinity;
+    this.city.nodes.forEach((n, i) => {
+      const d = Math.hypot(n.x - phone.x, n.z - phone.z);
+      if (n.kind === 'junction' && d < best) {
+        best = d;
+        stop = i;
+      }
+    });
+    const depot = this.city.depot;
+    const nodes = stop < 0 ? [] : this.table.path(depot.node, stop).map((n) => this.city.nodes[n]);
+    const xs = [depot.x, ...nodes.map((n) => n.x)];
+    const zs = [depot.z, ...nodes.map((n) => n.z)];
+    const cum = [0];
+    for (let k = 1; k < xs.length; k++) cum.push(cum[k - 1] + Math.hypot(xs[k] - xs[k - 1], zs[k] - zs[k - 1]));
+    const now = performance.now();
+    this.phoneRuns.set(phone.id, {
+      phoneId: phone.id,
+      xs,
+      zs,
+      cum,
+      length: cum.at(-1)!,
+      leftAt: now,
+      arriveAt: now + Math.max(3000, etaMs - 2000),
+      picked: false,
+      x: depot.x,
+      z: depot.z,
+      heading: 0,
+    });
+  }
+
+  private phoneCollected(id: string) {
+    const run = this.phoneRuns.get(id);
+    if (run && run.collectedAt === undefined) run.collectedAt = performance.now();
+  }
+
+  private stepPhoneRuns(now: number) {
+    for (const [id, r] of this.phoneRuns) {
+      if (r.collectedAt === undefined && now > r.arriveAt + PHONE_GIVE_UP_MS) r.collectedAt = now;
+      const pickupAt = r.collectedAt === undefined ? Infinity : Math.max(r.arriveAt, r.collectedAt);
+      let d = r.length;
+      let back = false;
+      if (now < r.arriveAt) d = r.length * ease((now - r.leftAt) / (r.arriveAt - r.leftAt));
+      else if (now >= pickupAt + PHONE_LOAD_MS) {
+        const q = (now - pickupAt - PHONE_LOAD_MS) / PHONE_RETURN_MS;
+        if (q >= 1) {
+          this.phoneRuns.delete(id);
+          continue;
+        }
+        d = r.length * (1 - ease(q));
+        back = true;
+      }
+      this.placeOnRun(r, d, back);
+      if (now >= pickupAt && !r.picked) {
+        r.picked = true;
+        const phone = this.phones.get(id);
+        if (phone) {
+          this.phonePickups.push({ id: this.nextPhonePickup++, x: phone.x, z: phone.z, tx: r.x, tz: r.z });
+          if (this.phonePickups.length > 20) this.phonePickups.shift();
+        }
+      }
+    }
+  }
+
+  private placeOnRun(r: PhoneRun, d: number, back: boolean) {
+    if (r.cum.length < 2) return;
+    let k = 1;
+    while (k < r.cum.length - 1 && r.cum[k] < d) k++;
+    const seg = r.cum[k] - r.cum[k - 1];
+    const a = seg > 0 ? Math.min(1, Math.max(0, (d - r.cum[k - 1]) / seg)) : 1;
+    const dx = r.xs[k] - r.xs[k - 1];
+    const dz = r.zs[k] - r.zs[k - 1];
+    r.x = r.xs[k - 1] + dx * a;
+    r.z = r.zs[k - 1] + dz * a;
+    if (dx !== 0 || dz !== 0) r.heading = Math.atan2(dx, dz) + (back ? Math.PI : 0);
   }
 
   private routeFrom(start: [number, number], nodes: number[]): Route {

@@ -8,7 +8,7 @@ import {
   worldKey,
   type StateUpdate,
 } from '@binsight/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { LiveWorld } from '../src/live/LiveWorld.ts';
 
 /** The cloud → browser path: messages built from a sim must rebuild the same city in the browser. */
@@ -79,6 +79,42 @@ describe('LiveWorld', () => {
     const p = world.phones.get(id)!;
     expect(p.nick).toBe('Priya');
     expect(p).toMatchObject(phonePlacement(world.city, id));
+  });
+
+  it('drives a truck to a dispatched phone bin, picks up, and drives home', () => {
+    const { world } = setup();
+    const id = 'p-0b5c6f3e-1234';
+    let now = 1000;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const reading = (r: number, event?: 'collected') => ({
+      bins: [{ id, kind: 'phone' as const, r, ok: true, temp: 29, gas: 40, bat: 100, tDevice: Date.now(), nick: 'Priya', emoji: '🐯', status: 'filling' as const, event }],
+      hops: { tDevice: 0, tReceived: 0, tStored: 0, tPublish: 0 },
+      batch: 1,
+    });
+    world.applyState(reading(0.85));
+    world.applyAlert({ kind: 'dispatch', binId: id, text: 'Truck 2 dispatched', wallT: Date.now() });
+    const run = world.phoneRuns.get(id)!;
+    expect(run.x).toBe(world.city.depot.x);
+    expect(run.length).toBeGreaterThan(0);
+
+    now += 9000;
+    world.advance();
+    const halfway = Math.hypot(run.x - world.city.depot.x, run.z - world.city.depot.z);
+    expect(halfway).toBeGreaterThan(0);
+    now += 9500;
+    world.advance();
+    expect(run.x).toBeCloseTo(run.xs.at(-1)!, 3);
+    expect(world.phonePickups).toHaveLength(0);
+
+    world.applyState(reading(0, 'collected'));
+    world.advance();
+    expect(world.phonePickups).toHaveLength(1);
+    expect(world.phones.get(id)!.dispatched).toBe(false);
+
+    now += 30_000;
+    world.advance();
+    expect(world.phoneRuns.has(id)).toBe(false);
+    clock.mockRestore();
   });
 
   it('sends operator actions to the cloud instead of simulating them', () => {

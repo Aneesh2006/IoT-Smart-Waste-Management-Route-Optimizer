@@ -45,45 +45,52 @@ function TruckBody({ truck, color }: { truck: TruckState; color: string }) {
 
   return (
     <group ref={group} onClick={onClick} onPointerOver={() => (document.body.style.cursor = 'pointer')} onPointerOut={() => (document.body.style.cursor = '')}>
-      <group scale={SCALE}>
-        {/* chassis */}
-        <mesh position={[0, 0.7, 0]} castShadow>
-          <boxGeometry args={[2.4, 0.6, 8]} />
-          <meshStandardMaterial color="#1f2937" roughness={0.6} />
+      <TruckModel color={color} lights={lights} beaconLit={truck.status === 'broken'} />
+    </group>
+  );
+}
+
+/** The truck's meshes; the caller places it and drives `lights` (head lamps, and the beacon when lit). */
+export function TruckModel({ color, lights, beaconLit = false }: { color: string; lights: MeshBasicMaterial; beaconLit?: boolean }) {
+  return (
+    <group scale={SCALE}>
+      {/* chassis */}
+      <mesh position={[0, 0.7, 0]} castShadow>
+        <boxGeometry args={[2.4, 0.6, 8]} />
+        <meshStandardMaterial color="#1f2937" roughness={0.6} />
+      </mesh>
+      {/* compactor body */}
+      <mesh position={[0, 2.2, -1]} castShadow>
+        <boxGeometry args={[2.5, 2.6, 5.4]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} roughness={0.45} metalness={0.15} />
+      </mesh>
+      {/* cab */}
+      <mesh position={[0, 1.9, 2.9]} castShadow>
+        <boxGeometry args={[2.4, 2, 1.8]} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.4} />
+      </mesh>
+      <mesh position={[0, 2.2, 3.81]}>
+        <boxGeometry args={[2.1, 0.9, 0.05]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.1} metalness={0.6} />
+      </mesh>
+      {[-0.85, 0.85].map((x) => (
+        <mesh key={x} position={[x, 1.2, 3.82]} material={lights}>
+          <boxGeometry args={[0.45, 0.3, 0.06]} />
         </mesh>
-        {/* compactor body */}
-        <mesh position={[0, 2.2, -1]} castShadow>
-          <boxGeometry args={[2.5, 2.6, 5.4]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} roughness={0.45} metalness={0.15} />
-        </mesh>
-        {/* cab */}
-        <mesh position={[0, 1.9, 2.9]} castShadow>
-          <boxGeometry args={[2.4, 2, 1.8]} />
-          <meshStandardMaterial color="#f8fafc" roughness={0.4} />
-        </mesh>
-        <mesh position={[0, 2.2, 3.81]}>
-          <boxGeometry args={[2.1, 0.9, 0.05]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.1} metalness={0.6} />
-        </mesh>
-        {[-0.85, 0.85].map((x) => (
-          <mesh key={x} position={[x, 1.2, 3.82]} material={lights}>
-            <boxGeometry args={[0.45, 0.3, 0.06]} />
+      ))}
+      {/* beacon on the roof (flashes amber when broken down) */}
+      <mesh position={[0, 3.1, 2.9]} material={beaconLit ? lights : undefined}>
+        <boxGeometry args={[0.8, 0.3, 0.4]} />
+        {!beaconLit && <meshBasicMaterial color={color} toneMapped={false} />}
+      </mesh>
+      {[-2.6, 0.2, 2.8].map((z) =>
+        [-1.25, 1.25].map((x) => (
+          <mesh key={`${x}${z}`} position={[x, 0.55, z]} rotation-z={Math.PI / 2}>
+            <cylinderGeometry args={[0.55, 0.55, 0.4, 10]} />
+            <meshStandardMaterial color="#111827" />
           </mesh>
-        ))}
-        {/* beacon on the roof (flashes amber when broken down) */}
-        <mesh position={[0, 3.1, 2.9]} material={truck.status === 'broken' ? lights : undefined}>
-          <boxGeometry args={[0.8, 0.3, 0.4]} />
-          {truck.status !== 'broken' && <meshBasicMaterial color={color} toneMapped={false} />}
-        </mesh>
-        {[-2.6, 0.2, 2.8].map((z) =>
-          [-1.25, 1.25].map((x) => (
-            <mesh key={`${x}${z}`} position={[x, 0.55, z]} rotation-z={Math.PI / 2}>
-              <cylinderGeometry args={[0.55, 0.55, 0.4, 10]} />
-              <meshStandardMaterial color="#111827" />
-            </mesh>
-          )),
-        )}
-      </group>
+        )),
+      )}
     </group>
   );
 }

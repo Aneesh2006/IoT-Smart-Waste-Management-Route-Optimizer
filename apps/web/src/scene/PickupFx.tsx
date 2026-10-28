@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import { AdditiveBlending, Color, DoubleSide, InstancedMesh, MeshBasicMaterial, Object3D, RingGeometry, BoxGeometry } from 'three';
+import { LiveWorld } from '../live/LiveWorld.ts';
 import { useApp } from '../state/store.ts';
 
 /**
@@ -28,6 +29,7 @@ export function PickupFx() {
   const scraps = useRef<InstancedMesh>(null);
   const fx = useRef<Fx[]>([]);
   const seen = useRef(sim.pickups.at(-1)?.id ?? -1);
+  const seenPhone = useRef(sim instanceof LiveWorld ? (sim.phonePickups.at(-1)?.id ?? -1) : -1);
   const geo = useMemo(() => ({ ring: new RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2), scrap: new BoxGeometry(1.6, 1.6, 1.6) }), []);
   const mats = useMemo(
     () => ({
@@ -50,6 +52,15 @@ export function PickupFx() {
         if (!site) continue;
         fx.current.push({ start: now, x: site.x, z: site.z, tx: t?.x ?? site.x, tz: t?.z ?? site.z, wasted: p.wasted, seed: p.id * 7.13 });
         if (fx.current.length > MAX) fx.current.shift();
+      }
+      // Audience phones: the truck LiveWorld sent has reached the bin.
+      if (sim instanceof LiveWorld) {
+        for (const p of sim.phonePickups) {
+          if (p.id <= seenPhone.current) continue;
+          seenPhone.current = p.id;
+          fx.current.push({ start: now, x: p.x, z: p.z, tx: p.tx, tz: p.tz, wasted: false, seed: p.id * 3.71 + 0.5 });
+          if (fx.current.length > MAX) fx.current.shift();
+        }
       }
     }
     fx.current = fx.current.filter((f) => now - f.start < LIFE);
