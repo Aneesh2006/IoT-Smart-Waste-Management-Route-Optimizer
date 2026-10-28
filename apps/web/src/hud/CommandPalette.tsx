@@ -44,7 +44,7 @@ function Palette() {
       { id: 'a-editor', group: 'Actions', label: 'Write a custom policy', run: () => s().setEditorOpen(true) },
       { id: 'a-next', group: 'Actions', label: 'Skip to the next shift', hint: 'N', run: () => s().skipToNextShift() },
       { id: 'a-city', group: 'Actions', label: 'Generate a new city', run: () => s().newCity() },
-      { id: 'a-live', group: 'Actions', label: s().mode === 'live' ? 'Back to Sandbox' : 'Go Live on AWS', run: () => void s().setMode(s().mode === 'live' ? 'sandbox' : 'live') },
+      { id: 'a-live', group: 'Actions', label: s().mode === 'live' ? 'Back to Sandbox' : 'Go Live in the cloud', run: () => void s().setMode(s().mode === 'live' ? 'sandbox' : 'live') },
       { id: 'a-guide', group: 'Actions', label: 'Guide', hint: '?', run: () => s().setGuideOpen(true) },
       ...policyOrder().map((id) => ({ id: `p-${id}`, group: 'Policy', label: `Switch to ${POLICIES[id].name}`, run: () => s().setPolicy(id) })),
       ...CHAOS_ORDER.map((k) => ({ id: `c-${k}`, group: 'Chaos', label: CHAOS_INFO[k].name, hint: CHAOS_INFO[k].question, run: () => sim.trigger(k) })),

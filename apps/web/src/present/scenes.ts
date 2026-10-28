@@ -129,9 +129,9 @@ export const SCENES: Scene[] = [
     },
   },
   {
-    kicker: 'On AWS',
+    kicker: 'In the cloud',
     title: 'Real-time ≠ instant',
-    subtitle: 'IoT Core → SQS → Lambda → DynamoDB → back to this screen, every hop timed',
+    subtitle: 'Vercel function → MongoDB Atlas → Ably → back to this screen, every hop timed',
     enter() {
       useApp.setState({ heatmap: 'off' });
       S().setXrayOpen(true);

@@ -2,6 +2,7 @@ import type { City } from '@binsight/core';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { BoxGeometry, Color, Object3D, type InstancedMesh } from 'three';
 import { DISTRICT_COLORS } from '../lib/colors.ts';
+import { blockDelays, clamp01, easeOutBack, PAD_IN, useIntro } from './intro.ts';
 
 const PAD_HEIGHT = 0.6;
 
@@ -27,6 +28,23 @@ export function Ground({ city }: { city: City }) {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
   }, [city]);
+
+  // Each pad pops out from its centre, rippling outward from the middle of the city.
+  const delays = useMemo(() => blockDelays(city), [city]);
+  const o = useMemo(() => new Object3D(), []);
+  useIntro((t) => {
+    const mesh = pads.current;
+    if (!mesh) return;
+    city.blocks.forEach((b, i) => {
+      const p = clamp01((t - delays[i]) / PAD_IN);
+      const k = p === 0 ? 0 : easeOutBack(p);
+      o.position.set((b.x0 + b.x1) / 2, 0, (b.z0 + b.z1) / 2);
+      o.scale.set((b.x1 - b.x0) * k, p === 0 ? 0 : PAD_HEIGHT, (b.z1 - b.z0) * k);
+      o.updateMatrix();
+      mesh.setMatrixAt(i, o.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+  });
 
   return (
     <group>

@@ -101,7 +101,7 @@ export function TopBar() {
         <IconButton onClick={() => useApp.getState().cycleHeatmap()} title={`Heatmap: ${heatmap} (G cycles fill → overflow → generated)`} active={heatmap !== 'off'}>
           <Flame size={16} />
         </IconButton>
-        <IconButton onClick={() => useApp.getState().setXrayOpen(true)} title="Cloud X-Ray: watch readings travel through AWS (X)">
+        <IconButton onClick={() => useApp.getState().setXrayOpen(true)} title="Cloud X-Ray: watch readings travel through the cloud (X)">
           <Radar size={16} />
         </IconButton>
         <IconButton onClick={() => void import('../present/scenes.ts').then((m) => m.startPresentation())} title="Present: scripted demo with captions (P)">
@@ -142,7 +142,7 @@ export function TopBar() {
                   <Cloud size={12} /> Live
                 </>
               ),
-              title: 'Stream the city from AWS: IoT Core, SQS, Lambda, DynamoDB',
+              title: 'Stream the city from the cloud: Vercel functions, MongoDB Atlas, Ably',
             },
           ]}
         />

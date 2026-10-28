@@ -2,6 +2,8 @@ node_modules/
 dist/
 .vite/
 coverage/
+.vercel/
+# Left behind by the AWS version (aws-version tag) on machines that deployed it.
 cdk.out/
 *.log
 .env
@@ -10,4 +12,3 @@ cdk.out/
 .DS_Store
 Thumbs.db
 .claude/
-apps/web/public/live-config*.json

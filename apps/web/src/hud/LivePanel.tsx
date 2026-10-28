@@ -8,7 +8,7 @@ import { Section, Segmented } from './ui.tsx';
 const STATUS = {
   off: { label: 'Offline', color: '#64748b' },
   connecting: { label: 'Connecting…', color: '#fbbf24' },
-  live: { label: 'Connected to AWS IoT Core', color: '#34d399' },
+  live: { label: 'Connected to the cloud', color: '#34d399' },
   error: { label: 'Connection problem', color: '#f87171' },
 } as const;
 
@@ -24,7 +24,7 @@ export function LivePanel() {
   const meta = STATUS[status];
 
   return (
-    <Section title="Cloud" right={<span className="font-mono text-[10px] text-slate-500">ap-south-1</span>}>
+    <Section title="Cloud" right={<span className="font-mono text-[10px] text-slate-500">Vercel · Atlas · Ably</span>}>
       <div className="flex items-center gap-2 text-[12px]">
         <span className={`size-2 rounded-full ${status === 'live' ? 'pulse-ring' : ''}`} style={{ background: meta.color }} />
         <span style={{ color: meta.color }}>{meta.label}</span>
@@ -48,8 +48,8 @@ export function LivePanel() {
       )}
       {sim instanceof LiveWorld && (
         <p className="mt-2 text-[10.5px] leading-snug text-slate-500">
-          {sim.bins.length} virtual bins publish MQTT readings to IoT Core; {sim.phones.size} phone{sim.phones.size === 1 ? '' : 's'} joined. Every pillar you see has been through
-          IoT Core → SQS → Lambda → DynamoDB → back to this browser.
+          {sim.bins.length} virtual bins report to the ingest function; {sim.phones.size} phone{sim.phones.size === 1 ? '' : 's'} joined. Every pillar you see has been through
+          a Vercel function → MongoDB Atlas → Ably → back to this browser.
         </p>
       )}
       {operator ? <OperatorControls /> : <SignIn />}
@@ -58,7 +58,6 @@ export function LivePanel() {
 }
 
 function SignIn() {
-  const [user, setUser] = useState('operator');
   const [pass, setPass] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -69,25 +68,19 @@ function SignIn() {
         e.preventDefault();
         setBusy(true);
         setErr(null);
-        signIn(user, pass)
+        signIn(pass)
           .catch((x: Error) => setErr(x.message))
           .finally(() => setBusy(false));
       }}
     >
-      <div className="text-[11px] text-slate-400">Operator sign-in (Cognito) to run the fleet:</div>
+      <div className="text-[11px] text-slate-400">Operator password to run the fleet:</div>
       <div className="flex gap-1.5">
-        <input
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          autoComplete="username"
-          className="w-24 rounded-lg bg-black/40 px-2 py-1 text-[12px] ring-1 ring-white/10 outline-none focus:ring-neon/50"
-        />
         <input
           type="password"
           value={pass}
           onChange={(e) => setPass(e.target.value)}
           autoComplete="current-password"
-          placeholder="password"
+          placeholder="operator password"
           className="min-w-0 flex-1 rounded-lg bg-black/40 px-2 py-1 text-[12px] ring-1 ring-white/10 outline-none focus:ring-neon/50"
         />
         <button disabled={busy || !pass} className="grid size-7 shrink-0 place-items-center rounded-lg bg-neon/90 text-ink disabled:opacity-40" title="Sign in">
@@ -124,7 +117,7 @@ function OperatorControls() {
         <button
           onClick={() => void control({ action: 'ingest', paused: !c.ingestPaused })}
           className={`${btn} ${c.ingestPaused ? 'bg-rose-500/15 text-rose-300 ring-rose-400/40' : 'bg-white/[0.04] text-slate-200 ring-white/10'}`}
-          title="Chaos: stop the ingest Lambda reading the queue. Readings pile up in SQS, nothing is lost."
+          title="Chaos: stop ingesting. Readings pile up in the MongoDB inbox and are drained on resume; nothing is lost."
         >
           {c.ingestPaused ? <Server size={13} /> : <CloudOff size={13} />} {c.ingestPaused ? 'Resume ingest' : 'Pause ingest'}
         </button>

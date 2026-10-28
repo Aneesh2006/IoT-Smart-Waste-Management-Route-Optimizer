@@ -12,8 +12,6 @@
     "sim": "node --experimental-strip-types scripts/compare.ts"
   },
   "devDependencies": {
-    "@aws-crypto/sha256-js": "^5.2.0",
-    "@smithy/signature-v4": "^5.7.4",
     "@types/node": "^24.0.0",
     "typescript": "~6.0.3",
     "vitest": "^5.0.5"

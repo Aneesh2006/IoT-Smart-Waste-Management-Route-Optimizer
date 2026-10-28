@@ -1,12 +1,10 @@
-import { binStatus, type BinStatus, type Hops, type RuleMessage, type Telemetry } from '@binsight/core';
+import { binStatus, type BinStatus, type Hops, type IngestMessage, type Telemetry } from '@binsight/core';
 
 /**
- * Pure parts of the ingest pipeline, kept free of AWS so they can be unit tested.
+ * Pure parts of the ingest pipeline, kept free of MongoDB and Ably so they can be unit tested.
  */
 export interface Incoming {
-  msg: RuleMessage;
-  /** When SQS accepted the message (SentTimestamp), epoch ms. */
-  tQueue: number;
+  msg: IngestMessage;
 }
 
 const clamp = (v: unknown, lo: number, hi: number, fallback: number) => {
@@ -14,11 +12,11 @@ const clamp = (v: unknown, lo: number, hi: number, fallback: number) => {
   return Math.min(hi, Math.max(lo, n));
 };
 
-/** Validate and normalise one SQS body. Anything a phone sends is untrusted. */
-export function parseMessage(body: string): RuleMessage | null {
+/** Validate and normalise one reading. Anything a phone sends is untrusted. */
+export function parseMessage(body: string | Record<string, unknown>): IngestMessage | null {
   let raw: Record<string, unknown>;
   try {
-    raw = JSON.parse(body);
+    raw = typeof body === 'string' ? JSON.parse(body) : body;
   } catch {
     return null;
   }
@@ -28,7 +26,7 @@ export function parseMessage(body: string): RuleMessage | null {
   if (!id || !city || id.length > 80 || city.length > 40) return null;
   const kind = id.startsWith('p-') ? 'phone' : 'fleet';
   const now = Date.now();
-  const msg: RuleMessage = {
+  const msg: IngestMessage = {
     id,
     city,
     kind,
@@ -38,7 +36,7 @@ export function parseMessage(body: string): RuleMessage | null {
     gas: clamp(raw.gas, 0, 5000, 20),
     bat: clamp(raw.bat, 0, 100, 100),
     tDevice: clamp(raw.tDevice, now - 3600_000, now + 60_000, now),
-    tRule: clamp(raw.tRule, 0, now + 60_000, now),
+    tReceived: clamp(raw.tReceived, 0, now + 60_000, now),
   };
   if (typeof raw.simT === 'number') msg.simT = raw.simT;
   if (kind === 'fleet' && typeof raw.world === 'string') msg.world = raw.world.slice(0, 80);
@@ -63,25 +61,19 @@ export function latestPerBin(items: Incoming[]): Incoming[] {
 }
 
 /**
- * DynamoDB update that sets every field of `item` except the keys, but only if it
- * is newer than what is stored (two ingest runs can deliver out of order). An
- * update, not a put, so fields like fireAlertAt survive.
+ * MongoDB upsert that sets every field of `item` except the keys, but only if it
+ * is newer than what is stored (two ingest runs can deliver out of order). When a
+ * newer reading is already there the filter misses, the upsert tries to insert a
+ * second row and the unique (city, bin) index rejects it: callers treat that
+ * duplicate-key error as "keep what's stored". `$set`, not a replace, so fields
+ * like fireAlertAt survive.
  */
-export function latestUpdate(item: Record<string, unknown>) {
-  const names: Record<string, string> = { '#t': 'tDevice' };
-  const values: Record<string, unknown> = { ':t': item.tDevice };
-  const sets: string[] = [];
-  Object.entries(item).forEach(([k, v], n) => {
-    if (k === 'city' || k === 'bin' || v === undefined) return;
-    names[`#a${n}`] = k;
-    values[`:a${n}`] = v;
-    sets.push(`#a${n} = :a${n}`);
-  });
+export function latestUpdate(item: Record<string, unknown> & { city: string; bin: string; tDevice: number }) {
+  const set: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(item)) if (k !== 'city' && k !== 'bin' && v !== undefined) set[k] = v;
   return {
-    UpdateExpression: `SET ${sets.join(', ')}`,
-    ConditionExpression: 'attribute_not_exists(#t) OR #t <= :t',
-    ExpressionAttributeNames: names,
-    ExpressionAttributeValues: values,
+    filter: { city: item.city, bin: item.bin, $or: [{ tDevice: { $exists: false } }, { tDevice: { $lte: item.tDevice } }] },
+    update: { $set: set },
   };
 }
 
@@ -90,13 +82,11 @@ export function withStatus(t: Telemetry): Telemetry & { status: BinStatus } {
 }
 
 /** Hops of the oldest message in the batch: the worst case the X-Ray shows. */
-export function oldestHops(items: Incoming[], tLambda: number, tStored: number, tPublish: number): Hops {
+export function oldestHops(items: Incoming[], tStored: number, tPublish: number): Hops {
   const oldest = items.reduce((a, b) => (b.msg.tDevice < a.msg.tDevice ? b : a));
   return {
     tDevice: oldest.msg.tDevice,
-    tRule: oldest.msg.tRule,
-    tQueue: oldest.tQueue,
-    tLambda,
+    tReceived: oldest.msg.tReceived,
     tStored,
     tPublish,
   };

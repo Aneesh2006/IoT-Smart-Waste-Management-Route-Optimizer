@@ -4,10 +4,14 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @binsight/web dev",
+    "dev:live": "pnpm --parallel --filter @binsight/services --filter @binsight/web run dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "sim": "pnpm --filter @binsight/core sim"
   },
-  "packageManager": "pnpm@11.7.0"
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "24.x"
+  }
 }

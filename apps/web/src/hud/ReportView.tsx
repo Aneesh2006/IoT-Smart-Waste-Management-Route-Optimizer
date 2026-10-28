@@ -77,8 +77,8 @@ export function ReportView() {
 
         <h2 className="mt-6 text-xl font-bold">1. Summary</h2>
         <p className="mt-2 text-[14px] leading-relaxed">
-          Smart bins measure their fill level with an ultrasonic sensor and publish it over MQTT to AWS IoT Core. A serverless pipeline (IoT rule → SQS → Lambda →
-          DynamoDB) stores every reading and streams it to a 3D digital twin of the city. A forecaster learns each bin’s daily rhythm, a collection policy decides
+          Smart bins measure their fill level with an ultrasonic sensor and report it over HTTPS to a serverless ingest function on Vercel, which stores every
+          reading in MongoDB Atlas and streams it over Ably to a 3D digital twin of the city. A forecaster learns each bin’s daily rhythm, a collection policy decides
           which bins need a truck, and a capacitated vehicle-routing solver plans multi-trip routes for the fleet.
           {fixed && rows.find((r) => r.policy === 'predictive') && (
             <>
@@ -91,22 +91,23 @@ export function ReportView() {
           )}
         </p>
 
-        <h2 className="mt-6 text-xl font-bold">2. Architecture on AWS (ap-south-1)</h2>
+        <h2 className="mt-6 text-xl font-bold">2. Architecture: Vercel, MongoDB Atlas and Ably</h2>
         <ArchitectureFigure />
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[13.5px] leading-relaxed">
           <li>
-            <b>AWS IoT Core</b>: MQTT broker for bins (virtual fleet Lambda and audience phones) and for streaming results back to browsers; an IoT rule forwards
-            readings to SQS.
+            <b>Vercel functions</b>: one serverless API. Bins and phones POST readings to the ingest route, which validates them, stores the latest state and a
+            history row, raises alerts and dispatches trucks to phone bins.
           </li>
           <li>
-            <b>Amazon SQS</b> buffers readings (dead-letter queue after three failed tries); <b>AWS Lambda</b> ingests batches into <b>DynamoDB</b> and republishes them.
+            <b>MongoDB Atlas</b> keeps bins, readings (expired by TTL), the control record, per-minute pipeline counters, and an <b>inbox</b> of readings waiting
+            for another try (dead letters after three).
           </li>
           <li>
-            <b>EventBridge</b> wakes the virtual-fleet Lambda every minute; <b>API Gateway</b> + Lambda serve state, CloudWatch metrics and operator control.
+            <b>Ably</b> pushes results to browsers and phones; clients subscribe with short-lived tokens the API mints, so no key reaches the browser.
           </li>
           <li>
-            <b>Cognito</b> signs in guests (MQTT only, scoped to their own topic) and operators; <b>S3 + CloudFront</b> host the app; <b>SNS</b> emails fire alerts; an
-            AWS Budget caps spend.
+            The virtual fleet <b>ticks lazily</b>: API requests advance the deterministic simulation to the current time under a MongoDB lease, with a daily
+            Vercel Cron as backup. Operators sign in with a password and a signed HttpOnly cookie; Vercel hosts the app; fire alerts go to an optional webhook.
           </li>
         </ul>
 
@@ -184,16 +185,18 @@ export function ReportView() {
         </table>
 
         <h2 className="mt-6 text-xl font-bold">5. What the cloud would cost</h2>
-        <p className="mt-2 text-[13.5px] text-slate-700">Every bin reporting every 15 minutes, pipeline as deployed, three dashboards watching. Approximate list prices.</p>
+        <p className="mt-2 text-[13.5px] text-slate-700">
+          Every bin reporting every 15 minutes, pipeline as deployed, three dashboards watching. Approximate list prices; Atlas is the cluster tier the write rate
+          needs.
+        </p>
         <table className="mt-3 w-full border-collapse text-[12.5px]">
           <thead>
             <tr className="border-b-2 border-slate-900 text-left">
               <th className="py-1.5">City size</th>
               <th className="text-right">Readings / month</th>
-              <th className="text-right">IoT Core</th>
-              <th className="text-right">SQS</th>
-              <th className="text-right">Lambda</th>
-              <th className="text-right">DynamoDB</th>
+              <th className="text-right">Vercel</th>
+              <th className="text-right">Ably</th>
+              <th className="text-right">MongoDB Atlas</th>
               <th className="text-right">Total / month</th>
             </tr>
           </thead>
@@ -206,10 +209,11 @@ export function ReportView() {
                 <tr key={n} className="border-b border-slate-200">
                   <td className="py-1.5">{n.toLocaleString('en-IN')} bins</td>
                   <td className="text-right font-mono">{fmtInt(readings)}</td>
-                  <td className="text-right font-mono">{usd(c.iot + c.rules)}</td>
-                  <td className="text-right font-mono">{usd(c.sqs)}</td>
-                  <td className="text-right font-mono">{usd(c.lambda)}</td>
-                  <td className="text-right font-mono">{usd(c.dynamo)}</td>
+                  <td className="text-right font-mono">{usd(c.fn)}</td>
+                  <td className="text-right font-mono">{usd(c.realtime)}</td>
+                  <td className="text-right font-mono">
+                    {usd(c.db)} <span className="text-slate-500">{c.dbTier}</span>
+                  </td>
                   <td className="text-right font-mono font-bold">
                     {usd(c.total)} <span className="font-normal text-slate-500">(₹{Math.round(c.total * PRICES.usdToInr).toLocaleString('en-IN')})</span>
                   </td>
@@ -233,7 +237,7 @@ export function ReportView() {
             {PROCESSING.densityKgPerL} kg per litre of loose waste; {Math.round(PROCESSING.wetToCompost * 100)}% of wet waste composted,{' '}
             {Math.round(PROCESSING.dryToRecycling * 100)}% of dry waste recovered.
           </li>
-          <li>Cloud prices are approximate on-demand list prices; check the AWS pricing pages for the region before quoting.</li>
+          <li>Cloud prices are approximate list prices; check the Vercel, Ably and MongoDB pricing pages before quoting.</li>
         </ul>
         <footer className="mt-8 border-t border-slate-300 pt-3 text-[11px] text-slate-500">
           Generated by BinSight from seed “{sim.config.seed}”. The same seed reproduces every number in this report.
@@ -301,23 +305,23 @@ function ArchitectureFigure() {
             <path d="M0,0 L10,5 L0,10 z" fill="#0f172a" />
           </marker>
         </defs>
-        {box(4, 20, 'Smart bins', 'MQTT/TLS')}
-        {box(4, 120, 'EventBridge', '→ λ fleet')}
-        {box(150, 70, 'IoT Core', 'broker + rule')}
-        {box(296, 70, 'SQS', '+ dead letters')}
-        {box(442, 70, 'λ ingest', 'batch of 10')}
-        {box(588, 20, 'DynamoDB', 'Bins · Readings')}
-        {box(588, 120, 'Browsers', '3D twin · phones')}
-        {box(442, 150, 'API Gateway', 'λ api · Cognito')}
+        {box(4, 20, 'Smart bins', 'HTTPS POST')}
+        {box(4, 120, 'Lazy tick', '→ ƒ fleet')}
+        {box(150, 70, 'ƒ ingest', 'Vercel function')}
+        {box(296, 20, 'MongoDB Atlas', 'bins · readings')}
+        {box(296, 120, 'Inbox', 'retries · dead letters')}
+        {box(442, 70, 'Ably', 'pub/sub')}
+        {box(588, 70, 'Browsers', '3D twin · phones')}
+        {box(442, 150, 'ƒ api', 'state · auth · tick')}
         {arrow(122, 42, 150, 82)}
         {arrow(122, 142, 150, 104)}
-        {arrow(268, 92, 296, 92)}
-        {arrow(414, 92, 442, 92)}
-        {arrow(560, 82, 588, 48)}
-        {arrow(560, 102, 588, 136)}
-        {arrow(588, 160, 560, 170)}
+        {arrow(268, 82, 296, 48)}
+        {arrow(268, 102, 296, 136)}
+        {arrow(268, 92, 442, 92)}
+        {arrow(560, 92, 588, 92)}
+        {arrow(588, 110, 560, 165)}
       </svg>
-      <figcaption className="text-center text-[11.5px] text-slate-500">Readings flow left to right; results return to browsers over the same MQTT broker.</figcaption>
+      <figcaption className="text-center text-[11.5px] text-slate-500">Readings flow left to right; Ably pushes the results to browsers and phones.</figcaption>
     </figure>
   );
 }

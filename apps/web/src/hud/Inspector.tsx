@@ -4,7 +4,7 @@ import { Suspense, lazy, useState } from 'react';
 import { DISTRICT_LABEL, STREAM_COLORS, TRUCK_COLORS, fillCss } from '../lib/colors.ts';
 import { fmtAgo, fmtHours, fmtInt, fmtKm, fmtPct } from '../lib/format.ts';
 import { useApp } from '../state/store.ts';
-import { BinAnatomy, BinMqtt } from './BinInternals.tsx';
+import { BinAnatomy, BinWire } from './BinInternals.tsx';
 import { Sparkline } from './Sparkline.tsx';
 import { Bar, IconButton, Panel, Section, Segmented } from './ui.tsx';
 
@@ -78,12 +78,12 @@ function BinCard({ sim, id }: { sim: Simulation; id: number }) {
           options={[
             { value: 'status', label: 'Status' },
             { value: 'inside', label: 'Inside' },
-            { value: 'wire', label: 'MQTT' },
+            { value: 'wire', label: 'Wire' },
           ]}
         />
       </div>
       {tab === 'inside' && <BinAnatomy site={site} st={st} />}
-      {tab === 'wire' && <BinMqtt site={site} st={st} city={useApp.getState().liveControl?.city ?? 'demo'} />}
+      {tab === 'wire' && <BinWire site={site} st={st} city={useApp.getState().liveControl?.city ?? 'demo'} />}
       {tab === 'status' && (
       <>
       <Decision sim={sim} id={id} />

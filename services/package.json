@@ -4,22 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "node src/dev-server.ts",
+    "build": "esbuild src/vercel.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/server.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --external:kerberos --external:@mongodb-js/zstd --external:snappy --external:socks --external:aws4 --external:mongodb-client-encryption --external:@aws-sdk/credential-providers --external:gcp-metadata --external:bufferutil --external:utf-8-validate --log-level=warning",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@binsight/core": "workspace:*"
+    "@binsight/core": "workspace:*",
+    "@vercel/functions": "^3.10.3",
+    "ably": "^2.30.0",
+    "mongodb": "^7.7.0"
   },
   "devDependencies": {
-    "@aws-sdk/client-cloudwatch": "^3.1156.0",
-    "@aws-sdk/client-dynamodb": "^3.1156.0",
-    "@aws-sdk/client-iot-data-plane": "^3.1156.0",
-    "@aws-sdk/client-lambda": "^3.1156.0",
-    "@aws-sdk/client-sns": "^3.1156.0",
-    "@aws-sdk/client-sqs": "^3.1156.0",
-    "@aws-sdk/lib-dynamodb": "^3.1156.0",
-    "@types/aws-lambda": "^8.10.164",
     "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "mongodb-memory-server": "^11.3.0",
     "typescript": "~6.0.3",
     "vitest": "^5.0.5"
   }
